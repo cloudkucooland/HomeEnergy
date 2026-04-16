@@ -8,6 +8,7 @@ RUN go build -ldflags="-s -w" -o deepcool ./cmd/deepcool
 
 # Step 2: Run the binary in a tiny container
 FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
 WORKDIR /root/
 COPY --from=builder /app/deepcool .
 CMD ["./deepcool", "--monitor-only"]

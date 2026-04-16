@@ -5,19 +5,14 @@ services:
     network_mode: host
     volumes:
       - influxdb_data:/var/lib/influxdb2
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
     restart: unless-stopped
-    environment:
-      - DOCKER_INFLUXDB_INIT_MODE=setup
-      - DOCKER_INFLUXDB_INIT_USERNAME=admin
-      - DOCKER_INFLUXDB_INIT_PASSWORD=password1234
-      - DOCKER_INFLUXDB_INIT_ORG=myhouse
-      - DOCKER_INFLUXDB_INIT_BUCKET=energy
-      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=my-super-secret-token-123
+    env_file: ".env"
     deploy:
       resources:
         limits:
           memory: "1g"
-
 
   grafana:
     image: grafana/grafana:latest
@@ -26,9 +21,9 @@ services:
     volumes:
       - grafana_data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=password1234
-      - GF_LOG_LEVEL=warn
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+    env_file: ".env"
     deploy:
       resources:
         limits:
@@ -38,36 +33,30 @@ services:
     build:
       dockerfile: cmd/deepcool/Dockerfile
     network_mode: host
-    environment:
-      - INFLUX_HOST=http://localhost:8086
-      - INFLUX_URL=http://localhost:8086
-      - INFLUX_TOKEN=my-super-secret-token-123
-      - INFLUX_ORG=myhouse
-      - INFLUX_BUCKET=energy
-      - INFLUX_DATABASE=energy
+    env_file: ".env"
     restart: unless-stopped
     deploy:
       resources:
         limits:
-          memory: "16m"
+          memory: "10m"
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
 
   emeter-logger:
     build:
       context: ../go-kasa
       dockerfile: cmd/emeterlog/Dockerfile
     network_mode: host
-    environment:
-      - INFLUX_HOST=http://localhost:8086
-      - INFLUX_URL=http://localhost:8086
-      - INFLUX_TOKEN=my-super-secret-token-123
-      - INFLUX_ORG=myhouse
-      - INFLUX_BUCKET=energy
-      - INFLUX_DATABASE=energy
+    env_file: ".env"
     restart: unless-stopped
     deploy:
       resources:
         limits:
           memory: "16m"
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
 
   envoy-logger:
     build:
@@ -76,13 +65,9 @@ services:
     network_mode: host
     volumes:
       - ./envoy_data:/data
-    environment:
-      - INFLUX_HOST=http://localhost:8086
-      - INFLUX_URL=http://localhost:8086
-      - INFLUX_TOKEN=my-super-secret-token-123
-      - INFLUX_ORG=myhouse
-      - INFLUX_BUCKET=energy
-      - INFLUX_DATABASE=energy
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+    env_file: ".env"
     restart: unless-stopped
     command: ["./envoylog", "startup", "--token", "/data/envoy.jwt"]
     deploy:
@@ -92,4 +77,6 @@ services:
 
 volumes:
   influxdb_data:
-  grafana_data:
+      external: true
+      name: emeterlog_influxdb_data
+  grafana_data: {}
