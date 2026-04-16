@@ -31,49 +31,32 @@ services:
 
   deepcool:
     build:
-      dockerfile: cmd/deepcool/Dockerfile
+      context: .
+      dockerfile: Dockerfile
+      target: deepcool-run
     network_mode: host
     env_file: ".env"
     restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: "10m"
-    volumes:
-      - /etc/localtime:/etc/localtime:ro
-      - /etc/timezone:/etc/timezone:ro
 
   emeter-logger:
     build:
-      context: ../go-kasa
-      dockerfile: cmd/emeterlog/Dockerfile
+      context: .
+      dockerfile: Dockerfile
+      target: emeter-run
     network_mode: host
     env_file: ".env"
     restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: "16m"
-    volumes:
-      - /etc/localtime:/etc/localtime:ro
-      - /etc/timezone:/etc/timezone:ro
 
   envoy-logger:
     build:
-      context: ../go-envoy
-      dockerfile: cmd/logger/Dockerfile
+      context: .
+      dockerfile: Dockerfile
+      target: envoy-run
     network_mode: host
     volumes:
       - ./envoy_data:/data
-      - /etc/localtime:/etc/localtime:ro
-      - /etc/timezone:/etc/timezone:ro
     env_file: ".env"
     restart: unless-stopped
-    command: ["./envoylog", "startup", "--token", "/data/envoy.jwt"]
-    deploy:
-      resources:
-        limits:
-          memory: "32m"
 
 volumes:
   influxdb_data:
