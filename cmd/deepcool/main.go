@@ -15,8 +15,8 @@ import (
 )
 
 const (
-	DeepCoolTemp     = 62 // 16.5
-	DeepCoolHeatTemp = 75
+	DeepCoolTemp     = 16.5 // need to be C even if the thermostat is set to display in F
+	DeepCoolHeatTemp = 20
 )
 
 func main() {
@@ -25,6 +25,8 @@ func main() {
 		Usage: "Deep cool house when exporting; depends on Daikin and InfluxDB",
 		Flags: []cli.Flag{
 			&cli.BoolFlag{Name: "monitor-only", Value: false, Usage: "monitor without engaging deep cooling"},
+			// &cli.StringFlag{Name: "energy-bucket", Value: "energy", Usage: "influxdb bucket for energy data (ro)"},
+			&cli.StringFlag{Name: "daikin-bucket", Value: "daikin", Usage: "influxdb bucket for daikin data (rw)"},
 		},
 		Action: run,
 	}
@@ -33,7 +35,7 @@ func main() {
 	defer stop()
 
 	if err := cmd.Run(ctx, os.Args); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		slog.Error("shutting down", "error", err)
 		os.Exit(1)
 	}
 }
@@ -46,7 +48,7 @@ func run(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	influx := influxdb2.NewClient(os.Getenv("INFLUX_HOST"), os.Getenv("INFLUX_TOKEN"))
-	// writeAPI := influx.WriteAPI(os.Getenv("INFLUX_ORG"), os.Getenv("INFLUX_BUCKET"))
+	writeAPI := influx.WriteAPI(os.Getenv("INFLUX_ORG"), cmd.String("daikin-bucket"))
 	queryAPI := influx.QueryAPI(os.Getenv("INFLUX_ORG"))
 	defer influx.Close()
 
@@ -58,37 +60,52 @@ func run(ctx context.Context, cmd *cli.Command) error {
 		case <-ctx.Done():
 			return nil
 		case <-ticker.C:
-			avgNetMW, err := getAveragePower(ctx, queryAPI)
+			for i := range daikin.Devices {
+				avgNetMW, err := getAveragePower(ctx, queryAPI)
+				if err != nil {
+					slog.Error("error getting average power", "err", err)
+					daikin.SetSchedule(i) // failsafe
+					continue
+				}
 
-			/* if dErr == nil {
-				logStats(writeAPI, devName, info)
-			} */
+				info, err := daikin.GetInfo(i)
+				if err != nil {
+					slog.Error("error pooling daikin", "err", err)
+					daikin.SetSchedule(i) // failsafe
+					continue
+				}
+				logStats(writeAPI, daikin.Devices[i].Name, info)
 
-			if err != nil || avgNetMW >= 0 {
-				fmt.Printf("[%s] Switching to Auto (Schedule)\n", time.Now().Format(time.Kitchen))
-				daikin.SetSchedule(0)
-			} else {
-				fmt.Printf("[%s] Export detected (%.1fW). Engaging Deep Cool.\n",
-					time.Now().Format(time.Kitchen), avgNetMW/1000.0)
-				if !cmd.Bool("monitor-only") {
-					daikin.SetDeepCool(0, DeepCoolTemp, DeepCoolHeatTemp)
+                // add logic to "soft cool" if export is "enough" but not enough for full summer load
+				isExportingSignificant := avgNetMW < -500000 // 500w
+				if isExportingSignificant {
+					slog.Info("Export detected, engaging deep cool", "watts", avgNetMW/1000.0)
+					if !cmd.Bool("monitor-only") && info.ScheduleEnabled {
+						daikin.SetDeepCool(i, DeepCoolHeatTemp, DeepCoolTemp)
+					}
+				} else if !info.ScheduleEnabled {
+					slog.Info("import OR low export detected, reverting to schedule", "watts", avgNetMW/1000.0)
+					daikin.SetSchedule(i)
 				}
 			}
 		}
 	}
 }
 
-/* func logStats(w api.WriteAPI, name string, info *daikin.DeviceInfo) {
+func logStats(w api.WriteAPI, name string, info *Info) {
 	p := influxdb2.NewPoint("daikin_stats",
 		map[string]string{"device": name},
 		map[string]interface{}{
-			"temp_indoor": info.TempIndoor,
-			"hum_indoor":  info.HumIndoor,
-			"csp":         info.CspActive,
+			"temp_indoor":      info.IndoorTemp,
+			"hum_indoor":       info.IndoorHumidity,
+			"temp_outdoor":     info.OutdoorTemp,
+			"hum_outdoor":      info.OutdoorHumidity,
+			"mode":             info.Mode,
+			"schedule_enabled": info.ScheduleEnabled,
 		},
 		time.Now())
 	w.WritePoint(p)
-} */
+}
 
 func getAveragePower(ctx context.Context, queryAPI api.QueryAPI) (float64, error) {
 	query := fmt.Sprintf(`
