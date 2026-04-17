@@ -9,3 +9,11 @@ providers:
     editable: true
     options:
       path: /etc/grafana/provisioning/dashboards/emlog.json
+  - name: 'DeepCool'
+    orgId: 1
+    folder: 'Power Systems'
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /etc/grafana/provisioning/dashboards/deepcool.json
