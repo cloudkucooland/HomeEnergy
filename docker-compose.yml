@@ -12,7 +12,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: "1g"
+          memory: "16g"
 
   grafana:
     image: grafana/grafana:latest
@@ -27,7 +27,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: "256m"
+          memory: "1g"
 
   deepcool:
     build:
@@ -37,6 +37,10 @@ services:
     network_mode: host
     env_file: ".env"
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: "16m"
 
   emeter-logger:
     build:
@@ -46,6 +50,10 @@ services:
     network_mode: host
     env_file: ".env"
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: "16m"
 
   envoy-logger:
     build:
@@ -57,6 +65,10 @@ services:
       - ./envoy_data:/data
     env_file: ".env"
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: "16m"
 
 volumes:
   influxdb_data:
