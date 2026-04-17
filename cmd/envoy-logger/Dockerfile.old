@@ -5,7 +5,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 # Note: Building from the envoy logger path
-RUN go build -ldflags="-s -w" -o envoylog ./cmd/logger
+RUN go build -ldflags="-s -w" -o envoy-logger ./cmd/envoy-logger
 
 # Step 2: Run the binary
 FROM debian:bookworm-slim
@@ -14,7 +14,7 @@ RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/
 WORKDIR /root/
 # Create data dir for the JWT token
 RUN mkdir /data
-COPY --from=builder /app/envoylog .
+COPY --from=builder /app/envoy-logger .
 
 # Run with the persistent token path
-CMD ["./envoylog", "startup", "--token", "/data/envoy.jwt"]
+CMD ["./envoy-logger", "startup", "--token", "/data/envoy.jwt"]
