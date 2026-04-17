@@ -88,8 +88,16 @@
             },
             "properties": [
               {
-                "id": "custom.axisPlacement",
-                "value": "right"
+                "id": "displayName",
+                "value": "Outside Temp"
+              },
+              {
+                "id": "unit",
+                "value": "none"
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "degC"
               }
             ]
           },
@@ -100,8 +108,16 @@
             },
             "properties": [
               {
-                "id": "custom.axisPlacement",
-                "value": "right"
+                "id": "displayName",
+                "value": "Indoor Temp"
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "degC"
+              },
+              {
+                "id": "unit",
+                "value": "none"
               }
             ]
           },
@@ -112,8 +128,22 @@
             },
             "properties": [
               {
-                "id": "custom.axisPlacement",
-                "value": "right"
+                "id": "displayName",
+                "value": "Indoor Humidity"
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "Relative Humidity"
+              },
+              {
+                "id": "custom.scaleDistribution",
+                "value": {
+                  "type": "linear"
+                }
+              },
+              {
+                "id": "unit",
+                "value": "percent"
               }
             ]
           },
@@ -124,8 +154,60 @@
             },
             "properties": [
               {
+                "id": "displayName",
+                "value": "Outside Humidity"
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "Relative Humidity"
+              },
+              {
+                "id": "custom.scaleDistribution",
+                "value": {
+                  "type": "linear"
+                }
+              },
+              {
+                "id": "unit",
+                "value": "percent"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "B"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "sishort"
+              },
+              {
+                "id": "displayName",
+                "value": "Net Consumption"
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "Watts"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "A"
+            },
+            "properties": [
+              {
                 "id": "custom.axisPlacement",
                 "value": "right"
+              },
+              {
+                "id": "custom.scaleDistribution",
+                "value": {
+                  "type": "linear"
+                }
               }
             ]
           }
@@ -170,7 +252,7 @@
           "refId": "B"
         }
       ],
-      "title": "New panel",
+      "title": "W vs Temp",
       "type": "timeseries"
     },
     {
@@ -292,6 +374,6 @@
   "timezone": "browser",
   "title": "DeepCool modeling",
   "uid": "ad2wrgp",
-  "version": 4,
+  "version": 28,
   "weekStart": ""
 }

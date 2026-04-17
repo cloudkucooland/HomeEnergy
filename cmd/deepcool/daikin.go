@@ -12,6 +12,8 @@ import (
 
 const base = "https://integrator-api.daikinskyport.com/v1"
 
+const modeCool = 2
+
 type AccessToken struct {
 	Value     string    `json:"accessToken"`
 	ExpiresIn int       `json:"accessTokenExpiresIn"`
@@ -49,7 +51,7 @@ type Info struct {
 	EquipmentStatus     int     `json:"equipmentStatus"`
 	Mode                int     `json:"mode"`
 	ModeLimit           int     `json:"modeLimit"`
-	ModeEMHeatAvailable bool     `json:"modeEmHeatAvailable"`
+	ModeEMHeatAvailable bool    `json:"modeEmHeatAvailable"`
 	Fan                 int     `json:"fan"`
 	FanCiruclate        int     `json:"fanCirculate"`
 	FanCiruclateSpeed   int     `json:"fanCirculateSpeed"`

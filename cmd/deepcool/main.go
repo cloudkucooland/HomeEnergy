@@ -76,15 +76,31 @@ func run(ctx context.Context, cmd *cli.Command) error {
 				}
 				logStats(writeAPI, daikin.Devices[i].Name, info)
 
-                // add logic to "soft cool" if export is "enough" but not enough for full summer load
-				isExportingSignificant := avgNetMW < -500000 // 500w
-				if isExportingSignificant {
+				if info.Mode != modeCool {
+					slog.Error("deepcool disabled in auto/heat modes", "err", err)
+					continue
+				}
+
+				isExportingSignificant := false
+				if !info.ScheduleEnabled {
+					// WE ARE ALREADY IN DEEP COOL.
+					// Stay in it as long as we aren't importing more than 500W.
+					// Logic: Keep true if net power is less than 500W (e.g., -2000 export up to +500 import)
+					isExportingSignificant = avgNetMW < 500000
+				} else {
+					// WE ARE ON NORMAL SCHEDULE.
+					// Only engage if exporting more than 1.1kW.
+					// Logic: True only if net power is deep in the negatives (exporting).
+					isExportingSignificant = avgNetMW < -1100000
+				}
+
+				if isExportingSignificant && info.ScheduleEnabled {
 					slog.Info("Export detected, engaging deep cool", "watts", avgNetMW/1000.0)
-					if !cmd.Bool("monitor-only") && info.ScheduleEnabled {
+					if !cmd.Bool("monitor-only") {
 						daikin.SetDeepCool(i, DeepCoolHeatTemp, DeepCoolTemp)
 					}
-				} else if !info.ScheduleEnabled {
-					slog.Info("import OR low export detected, reverting to schedule", "watts", avgNetMW/1000.0)
+				} else if !isExportingSignificant && !info.ScheduleEnabled {
+					slog.Info("import detected, reverting to schedule", "watts", avgNetMW/1000.0)
 					daikin.SetSchedule(i)
 				}
 			}

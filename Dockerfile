@@ -5,7 +5,8 @@ RUN go build -ldflags="-s -w" -o /emeter-logger ./cmd/emeter-logger
 RUN go build -ldflags="-s -w" -o /envoy-logger ./cmd/envoy-logger
 RUN go build -ldflags="-s -w" -o /deepcool ./cmd/deepcool
 
-FROM debian:trixie-slim AS base-runtime
+#FROM debian:trixie-slim AS base-runtime
+FROM debian:bookworm-slim AS base-runtime
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
 WORKDIR /root/
 
