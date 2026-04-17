@@ -1,0 +1,20 @@
+# Step 1: Build the binary
+FROM golang:1.25-bookworm AS builder
+WORKDIR /app
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+# Note: Building from the envoy logger path
+RUN go build -ldflags="-s -w" -o envoylog ./cmd/logger
+
+# Step 2: Run the binary
+FROM debian:bookworm-slim
+# Install CA certs so the app can talk to Enphase/Envoy over HTTPS
+RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+WORKDIR /root/
+# Create data dir for the JWT token
+RUN mkdir /data
+COPY --from=builder /app/envoylog .
+
+# Run with the persistent token path
+CMD ["./envoylog", "startup", "--token", "/data/envoy.jwt"]
