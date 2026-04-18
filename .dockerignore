@@ -1,0 +1,9 @@
+.git
+.github
+.gitignore
+README.md
+*.md
+go.test.sum
+vendor/
+.env*
+grafana
