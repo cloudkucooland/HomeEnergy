@@ -9,6 +9,11 @@ services:
       - /etc/timezone:/etc/timezone:ro
     restart: unless-stopped
     env_file: ".env"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     deploy:
       resources:
         limits:
@@ -23,7 +28,13 @@ services:
       - ./grafana/provisioning:/etc/grafana/provisioning
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
+    restart: unless-stopped
     env_file: ".env"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     deploy:
       resources:
         limits:
@@ -36,11 +47,19 @@ services:
       target: deepcool-run
     network_mode: host
     env_file: ".env"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     restart: unless-stopped
     deploy:
       resources:
         limits:
           memory: "16m"
+    #depends_on:
+      #influxdb:
+        #condition: service_healthy
 
   emeter-logger:
     build:
@@ -49,11 +68,19 @@ services:
       target: emeter-run
     network_mode: host
     env_file: ".env"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     restart: unless-stopped
     deploy:
       resources:
         limits:
           memory: "16m"
+    #depends_on:
+      #influxdb:
+        #condition: service_healthy
 
   envoy-logger:
     build:
@@ -64,11 +91,19 @@ services:
     volumes:
       - ./envoy_data:/data
     env_file: ".env"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     restart: unless-stopped
     deploy:
       resources:
         limits:
           memory: "16m"
+    #depends_on:
+      #influxdb:
+        #condition: service_healthy
 
 volumes:
   influxdb_data:
