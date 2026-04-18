@@ -9,9 +9,12 @@ require (
 	github.com/urfave/cli/v3 v3.8.0
 )
 
+replace github.com/cloudkucooland/go-daikin => ../go-daikin
+
 require (
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
 	github.com/brutella/dnssd v1.2.14 // indirect
+	github.com/cloudkucooland/go-daikin v0.0.0-20260418033328-0a2f8b6a7c84 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/influxdata/line-protocol v0.0.0-20210922203350-b1ad95c89adf // indirect
 	github.com/miekg/dns v1.1.72 // indirect

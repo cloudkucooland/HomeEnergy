@@ -12,6 +12,8 @@ import (
 	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
 	"github.com/influxdata/influxdb-client-go/v2/api"
 	"github.com/urfave/cli/v3"
+
+	"github.com/cloudkucooland/go-daikin"
 )
 
 const (
@@ -43,7 +45,7 @@ func main() {
 }
 
 func run(ctx context.Context, cmd *cli.Command) error {
-	daikin, err := NewDaikin(os.Getenv("DAIKIN_EMAIL"), os.Getenv("DAIKIN_DEVELOPER_KEY"), os.Getenv("DAIKIN_API_KEY"))
+	d, err := daikin.New(os.Getenv("DAIKIN_EMAIL"), os.Getenv("DAIKIN_DEVELOPER_KEY"), os.Getenv("DAIKIN_API_KEY"))
 	if err != nil {
 		slog.Error("unable to connect to Daikin", "err", err)
 		return err
@@ -62,26 +64,26 @@ func run(ctx context.Context, cmd *cli.Command) error {
 		case <-ctx.Done():
 			return nil
 		case <-ticker.C:
-			for i := range daikin.Devices {
+			for _, device := range d.Devices {
 				nctx, ncancel := context.WithTimeout(ctx, 30*time.Second)
 				avgNetMW, err := getAveragePower(nctx, queryAPI)
 				if err != nil {
 					slog.Error("error getting average power", "err", err)
-					daikin.SetSchedule(ctx, i) // failsafe, use primary context
+					device.SetModeSchedule(ctx) // failsafe, use primary context
 					ncancel()
 					continue
 				}
 
-				info, err := daikin.GetInfo(nctx, i)
+				info, err := device.GetInfo(nctx)
 				if err != nil {
 					slog.Error("error pooling daikin", "err", err)
-					daikin.SetSchedule(ctx, i) // failsafe, use primary context
+					device.SetModeSchedule(ctx) // failsafe, use primary context
 					ncancel()
 					continue
 				}
-				logStats(writeAPI, daikin.Devices[i].Name, info)
+				logStats(writeAPI, device.Name, info)
 
-				if info.Mode != modeCool {
+				if info.Mode != daikin.ModeCool {
 					slog.Error("deepcool disabled in auto/heat modes", "err", err)
 					ncancel()
 					continue
@@ -103,11 +105,11 @@ func run(ctx context.Context, cmd *cli.Command) error {
 				if isExportingSignificant && info.ScheduleEnabled {
 					slog.Info("Export detected, engaging deep cool", "watts", avgNetMW/1000.0)
 					if !cmd.Bool("monitor-only") {
-						daikin.SetDeepCool(nctx, i, DeepCoolHeatTemp, DeepCoolTemp)
+						device.SetTemps(nctx, daikin.ModeCool, DeepCoolHeatTemp, DeepCoolTemp)
 					}
 				} else if !isExportingSignificant && !info.ScheduleEnabled {
 					slog.Info("import detected, reverting to schedule", "watts", avgNetMW/1000.0)
-					daikin.SetSchedule(ctx, i)
+					device.SetModeSchedule(ctx)
 				}
 				ncancel()
 			}
@@ -115,7 +117,7 @@ func run(ctx context.Context, cmd *cli.Command) error {
 	}
 }
 
-func logStats(w api.WriteAPI, name string, info *Info) {
+func logStats(w api.WriteAPI, name string, info *daikin.Info) {
 	p := influxdb2.NewPoint("daikin_stats",
 		map[string]string{"device": name},
 		map[string]interface{}{
