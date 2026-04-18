@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	// "io"
@@ -11,7 +12,7 @@ import (
 )
 
 const base = "https://integrator-api.daikinskyport.com/v1"
-
+const httpTimeout = 10 * time.Second
 const modeCool = 2
 
 type AccessToken struct {
@@ -53,8 +54,8 @@ type Info struct {
 	ModeLimit           int     `json:"modeLimit"`
 	ModeEMHeatAvailable bool    `json:"modeEmHeatAvailable"`
 	Fan                 int     `json:"fan"`
-	FanCiruclate        int     `json:"fanCirculate"`
-	FanCiruclateSpeed   int     `json:"fanCirculateSpeed"`
+	FanCirculate        int     `json:"fanCirculate"`
+	FanCirculateSpeed   int     `json:"fanCirculateSpeed"`
 	HeatSetpoint        float64 `json:"heatSetpoint"`
 	CoolSetpoint        float64 `json:"coolSetpoint"`
 	SetPointDelta       int     `json:"setpointDelta"`
@@ -75,27 +76,29 @@ func NewDaikin(email, developerKey, apiKey string) (*daikin, error) {
 		APIKey:       apiKey,
 	}
 
-	d.refreshToken()
+	ctx := context.Background()
+
+	d.refreshToken(ctx)
 	slog.Info("Daikin authenticated", "expires_at", d.AccessToken.ExpiresAt)
 
-	if err := d.getDevices(); err != nil {
+	if err := d.getDevices(ctx); err != nil {
 		return nil, fmt.Errorf("failed to get devices: %w", err)
 	}
 	return d, nil
 }
 
 // GetToken returns the current token, or fetches a new one if it's expired
-func (d *daikin) GetToken() (string, error) {
+func (d *daikin) GetToken(ctx context.Context) (string, error) {
 	// Give ourselves a 60-second buffer so we don't expire mid-request
 	if time.Now().Add(60 * time.Second).Before(d.AccessToken.ExpiresAt) {
 		return d.AccessToken.Value, nil
 	}
-	d.refreshToken()
+	d.refreshToken(ctx)
 	slog.Info("Daikin token renewed", "expires_at", d.AccessToken.ExpiresAt)
 	return d.AccessToken.Value, nil
 }
 
-func (d *daikin) SetDeepCool(deviceID int, heat, cool float64) error {
+func (d *daikin) SetDeepCool(ctx context.Context, deviceID int, heat, cool float64) error {
 	if deviceID >= len(d.Devices) {
 		return fmt.Errorf("device index %d out of range", deviceID)
 	}
@@ -109,7 +112,7 @@ func (d *daikin) SetDeepCool(deviceID int, heat, cool float64) error {
 	}
 
 	body, _ := json.Marshal(payload)
-	res, err := d.doRequest("PUT", url, bytes.NewBuffer(body))
+	res, err := d.doRequest(ctx, "PUT", url, bytes.NewBuffer(body))
 	if err != nil {
 		return err
 	}
@@ -123,7 +126,7 @@ func (d *daikin) SetDeepCool(deviceID int, heat, cool float64) error {
 	return nil
 }
 
-func (d *daikin) SetSchedule(deviceID int) error {
+func (d *daikin) SetSchedule(ctx context.Context, deviceID int) error {
 	if deviceID >= len(d.Devices) {
 		return fmt.Errorf("device index %d out of range", deviceID)
 	}
@@ -136,7 +139,7 @@ func (d *daikin) SetSchedule(deviceID int) error {
 	}
 
 	body, _ := json.Marshal(payload)
-	res, err := d.doRequest("PUT", url, body)
+	res, err := d.doRequest(ctx, "PUT", url, body)
 	if err != nil {
 		return err
 	}
@@ -150,8 +153,8 @@ func (d *daikin) SetSchedule(deviceID int) error {
 	return nil
 }
 
-func (d *daikin) getDevices() error {
-	res, err := d.doRequest("GET", "/devices", nil)
+func (d *daikin) getDevices(ctx context.Context) error {
+	res, err := d.doRequest(ctx, "GET", "/devices", nil)
 	if err != nil {
 		return err
 	}
@@ -173,9 +176,9 @@ func (d *daikin) getDevices() error {
 	return nil
 }
 
-func (d *daikin) GetInfo(deviceID int) (*Info, error) {
+func (d *daikin) GetInfo(ctx context.Context, deviceID int) (*Info, error) {
 	url := fmt.Sprintf("/devices/%s", d.Devices[deviceID].ID)
-	res, err := d.doRequest("GET", url, nil)
+	res, err := d.doRequest(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -183,15 +186,15 @@ func (d *daikin) GetInfo(deviceID int) (*Info, error) {
 
 	var info Info
 	if err := json.NewDecoder(res.Body).Decode(&info); err != nil {
-		return nil, fmt.Errorf("failed to decode locations: %w", err)
+		return nil, fmt.Errorf("failed to decode info: %w", err)
 	}
 
 	// slog.Info("Daikin data pulled", "indoor temp", info.IndoorTemp, "indoor humidity", info.IndoorHumidity)
 	return &info, nil
 }
 
-func (d *daikin) doRequest(method, path string, body interface{}) (*http.Response, error) {
-	token, err := d.GetToken()
+func (d *daikin) doRequest(ctx context.Context, method, path string, body interface{}) (*http.Response, error) {
+	token, err := d.GetToken(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -204,7 +207,7 @@ func (d *daikin) doRequest(method, path string, body interface{}) (*http.Respons
 	}
 
 	url := fmt.Sprintf("%s%s", base, path)
-	req, err := http.NewRequest(method, url, &buf)
+	req, err := http.NewRequestWithContext(ctx, method, url, &buf)
 	if err != nil {
 		return nil, err
 	}
@@ -214,11 +217,11 @@ func (d *daikin) doRequest(method, path string, body interface{}) (*http.Respons
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", "DeepCool/1.0")
 
-	client := &http.Client{Timeout: 10 * time.Second}
+	client := &http.Client{Timeout: httpTimeout}
 	return client.Do(req)
 }
 
-func (d *daikin) refreshToken() error {
+func (d *daikin) refreshToken(ctx context.Context) error {
 	payload := struct {
 		Email           string `json:"email"`
 		IntegratorToken string `json:"integratorToken"`
@@ -227,13 +230,19 @@ func (d *daikin) refreshToken() error {
 		IntegratorToken: d.DeveloperKey,
 	}
 
-	body, _ := json.Marshal(payload)
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
 	url := fmt.Sprintf("%s/token", base)
-	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(body))
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(body))
+	if err != nil {
+		return err
+	}
 	req.Header["x-api-key"] = []string{d.APIKey}
 	req.Header.Set("Content-Type", "application/json")
 
-	client := &http.Client{Timeout: 15 * time.Second}
+	client := &http.Client{Timeout: httpTimeout}
 	res, err := client.Do(req)
 	if err != nil {
 		return err

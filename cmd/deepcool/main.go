@@ -15,8 +15,10 @@ import (
 )
 
 const (
-	DeepCoolTemp     = 16.5 // need to be C even if the thermostat is set to display in F
-	DeepCoolHeatTemp = 20
+	DeepCoolTemp           = 16.5               // need to be C even if the thermostat is set to display in F
+	DeepCoolHeatTemp       = DeepCoolTemp + 5.5 // Just needs to be more than DeepCoolTemp
+	DeepCoolMaxImportWatts = 500000             // if in deepcool mode, how much can we "overdraw" before switching to schedule?
+	DeepCoolMinExportWatts = -1100000           // if in schedule, how much do we need to be exporting before we start deepcool (negative for export)
 )
 
 func main() {
@@ -61,23 +63,27 @@ func run(ctx context.Context, cmd *cli.Command) error {
 			return nil
 		case <-ticker.C:
 			for i := range daikin.Devices {
-				avgNetMW, err := getAveragePower(ctx, queryAPI)
+				nctx, ncancel := context.WithTimeout(ctx, 30*time.Second)
+				avgNetMW, err := getAveragePower(nctx, queryAPI)
 				if err != nil {
 					slog.Error("error getting average power", "err", err)
-					daikin.SetSchedule(i) // failsafe
+					daikin.SetSchedule(ctx, i) // failsafe, use primary context
+					ncancel()
 					continue
 				}
 
-				info, err := daikin.GetInfo(i)
+				info, err := daikin.GetInfo(nctx, i)
 				if err != nil {
 					slog.Error("error pooling daikin", "err", err)
-					daikin.SetSchedule(i) // failsafe
+					daikin.SetSchedule(ctx, i) // failsafe, use primary context
+					ncancel()
 					continue
 				}
 				logStats(writeAPI, daikin.Devices[i].Name, info)
 
 				if info.Mode != modeCool {
 					slog.Error("deepcool disabled in auto/heat modes", "err", err)
+					ncancel()
 					continue
 				}
 
@@ -86,23 +92,24 @@ func run(ctx context.Context, cmd *cli.Command) error {
 					// WE ARE ALREADY IN DEEP COOL.
 					// Stay in it as long as we aren't importing more than 500W.
 					// Logic: Keep true if net power is less than 500W (e.g., -2000 export up to +500 import)
-					isExportingSignificant = avgNetMW < 500000
+					isExportingSignificant = avgNetMW < DeepCoolMaxImportWatts
 				} else {
 					// WE ARE ON NORMAL SCHEDULE.
 					// Only engage if exporting more than 1.1kW.
 					// Logic: True only if net power is deep in the negatives (exporting).
-					isExportingSignificant = avgNetMW < -1100000
+					isExportingSignificant = avgNetMW < DeepCoolMinExportWatts
 				}
 
 				if isExportingSignificant && info.ScheduleEnabled {
 					slog.Info("Export detected, engaging deep cool", "watts", avgNetMW/1000.0)
 					if !cmd.Bool("monitor-only") {
-						daikin.SetDeepCool(i, DeepCoolHeatTemp, DeepCoolTemp)
+						daikin.SetDeepCool(nctx, i, DeepCoolHeatTemp, DeepCoolTemp)
 					}
 				} else if !isExportingSignificant && !info.ScheduleEnabled {
 					slog.Info("import detected, reverting to schedule", "watts", avgNetMW/1000.0)
-					daikin.SetSchedule(i)
+					daikin.SetSchedule(ctx, i)
 				}
+				ncancel()
 			}
 		}
 	}
