@@ -17,7 +17,7 @@ LABEL org.opencontainers.image.title="HomeEnergy" \
       org.opencontainers.image.version="${VERSION}"
 
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
-RUN useradd -m -u 1000 appuser
+RUN useradd -m -u 65000 appuser
 WORKDIR /root/
 
 FROM base-runtime AS emeter-run
