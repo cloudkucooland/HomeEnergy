@@ -1,9 +1,9 @@
-module homeenergy
+module github.com/cloudkucooland/HomeEnergy
 
 go 1.25.0
 
 require (
-	github.com/cloudkucooland/go-daikin v0.0.0-20260418040156-7a95206e50fc
+	github.com/cloudkucooland/go-daikin v0.0.0-20260418200159-87c41b88b96e
 	github.com/cloudkucooland/go-envoy v0.0.0-20260410020431-53a2f2d66cf0
 	github.com/cloudkucooland/go-kasa v0.0.0-20260409231212-572c4a0bf3b9
 	github.com/influxdata/influxdb-client-go/v2 v2.14.0
