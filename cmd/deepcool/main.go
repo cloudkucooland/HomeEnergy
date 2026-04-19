@@ -45,7 +45,7 @@ func main() {
 }
 
 func run(ctx context.Context, cmd *cli.Command) error {
-	d, err := daikin.New(os.Getenv("DAIKIN_EMAIL"), os.Getenv("DAIKIN_DEVELOPER_KEY"), os.Getenv("DAIKIN_API_KEY"))
+	d, err := daikin.New(ctx, os.Getenv("DAIKIN_EMAIL"), os.Getenv("DAIKIN_DEVELOPER_KEY"), os.Getenv("DAIKIN_API_KEY"))
 	if err != nil {
 		slog.Error("unable to connect to Daikin", "err", err)
 		return err
