@@ -16,12 +16,16 @@ import (
 	"github.com/cloudkucooland/go-daikin"
 )
 
+// remember, we are stuck with PowerMW as miliwatts, not megawatts, all "watts" values are in mW.
+// this is due to the field name in the go-envoy library
+
 const (
-	DeepCoolTemp             = 16.5               // need to be C even if the thermostat is set to display in F
-	DeepCoolHeatTemp         = DeepCoolTemp + 5.5 // Just needs to be more than DeepCoolTemp
-	DeepCoolMaxImportWatts   = 500000             // if in deepcool mode, how much can we "overdraw" before switching to schedule?
-	DeepCoolMinExportWatts   = -1100000           // if in schedule, how much do we need to be exporting before we start deepcool (negative for export)
-	DeepCoolMinorExportWatts = -200000            // for demand-response-based "not-so-deep" cooling
+	DeepCoolTemp                = 16.5               // need to be C even if the thermostat is set to display in F
+	DeepCoolHeatTemp            = DeepCoolTemp + 5.5 // Just needs to be more than DeepCoolTemp
+	DeepCoolMaxImportWatts      = 500000             // if in deepcool mode, how much can we "overdraw" before switching to schedule?
+	DeepCoolMinExportWatts      = -1100000           // if in schedule, how much do we need to be exporting before we start deepcool (negative for export)
+	DeepCoolModerateExportWatts = -200000            // for "not-so-deep" cooling
+	DeepCoolModerateTempOffset  = 2.0                // how much to bump down in moderate mode
 )
 
 func main() {
@@ -57,7 +61,7 @@ func run(ctx context.Context, cmd *cli.Command) error {
 	slog.Info("Starting deepcool", "daikin", d.Devices[0].Name)
 
 	influx := influxdb2.NewClient(os.Getenv("INFLUX_HOST"), os.Getenv("INFLUX_TOKEN"))
-	slog.Info("Setting up InfluxDB", "host", os.Getenv("INFLUX_HOST"), "bucket", cmd.String("daikin-bucket"))
+	slog.Info("Setting up InfluxDB", "host", os.Getenv("INFLUX_HOST"), "daikin-bucket", cmd.String("daikin-bucket"), "energy-bucket", os.Getenv("INFLUX_BUCKET"))
 	ok, err := influx.Health(ctx)
 	if err != nil || ok.Status != "pass" {
 		slog.Error("influxdb health check failed", "error", err)
@@ -79,9 +83,9 @@ func run(ctx context.Context, cmd *cli.Command) error {
 				avgNetMW, err := getAveragePower(nctx, queryAPI)
 				if err != nil {
 					slog.Error("error getting average power", "err", err)
-					if err := device.SetModeSchedule(ctx); err != nil {
+					if err := device.SetModeSchedule(ctx); err != nil { // failsafe, use primary context
 						slog.Error("unable to switch to schedule", "error", err)
-					} // failsafe, use primary context
+					}
 					ncancel()
 					continue
 				}
@@ -99,6 +103,8 @@ func run(ctx context.Context, cmd *cli.Command) error {
 				if err := logStats(nctx, writeAPI, device.Name, info); err != nil {
 					slog.Error("unable to log to influx", "error", err)
 				}
+
+				slog.Info("tick", "device", device.Name, "net_watts", fmt.Sprintf("%.2f", avgNetMW/1000.0), "mode", info.Mode, "temp", info.IndoorTemp)
 
 				if info.Mode != daikin.ModeCool {
 					slog.Info("deepcool disabled in auto/heat modes")
@@ -124,7 +130,6 @@ func run(ctx context.Context, cmd *cli.Command) error {
 				switch {
 				case avgNetMW < DeepCoolMinExportWatts:
 					// STATE: MAXIMUM EXPORT -> FULL DEEP COOL
-					slog.Info("state: maximum export")
 					if info.ScheduleEnabled {
 						slog.Info("Heavy export: Engaging Full Deep Cool", "watts", avgNetMW/1000.0)
 						if !mo {
@@ -133,53 +138,45 @@ func run(ctx context.Context, cmd *cli.Command) error {
 							}
 						}
 					}
-					// Disable DR so it doesn't try to offset our already low manual setpoint
-					if info.DRIsActive && !mo {
-						if err := device.SetDemandResponse(nctx, false, 0); err != nil {
-							slog.Error("unable to clear demand-response settings", "error", err)
-						}
-					}
 
-				case avgNetMW < DeepCoolMinorExportWatts:
-					// STATE: MODERATE EXPORT -> SOFT COOL (DR)
-					slog.Info("state: moderate")
-					// If we were in Deep Cool, bring it back to schedule first
-					if !info.ScheduleEnabled {
-						slog.Info("Export reduced: Reverting to Schedule with DR Offset", "watts", avgNetMW/1000.0)
+				case avgNetMW < DeepCoolModerateExportWatts:
+					// STATE: MODERATE EXPORT -> RELATIVE NUDGE
+					// Logic: If we are on schedule, drop 2 degrees and go manual.
+					// If we are already manual, we assume we've already nudged (or are in DeepCool).
+					// Demand-Response does not work on my system, do it manually
+					if info.ScheduleEnabled {
+						slog.Info("Moderate export: Nudging setpoints down 2.0C", "watts", avgNetMW/1000.0)
 						if !mo {
-							if err := device.SetModeSchedule(nctx); err != nil {
-								slog.Error("unable to revert to schedule", "error", err)
+							// We maintain the heat/cool spread but drop the floor
+							newHeat := info.HeatSetpoint - DeepCoolModerateTempOffset
+							newCool := info.CoolSetpoint - DeepCoolModerateTempOffset
+
+							// Boundary safety check using the device's own reported limits
+							if newCool < info.SetPointMinimum {
+								newCool = info.SetPointMinimum
+							}
+
+							if err := device.SetTemps(nctx, info.Mode, newHeat, newCool); err != nil {
+								slog.Error("unable to apply moderate nudge", "error", err)
 							}
 						}
-					}
-					// Nudge the schedule down by 2 degrees
-					if !info.DRIsActive || info.DROffsetDegree != -2.0 {
-						slog.Info("Minor export: Applying -2.0C Demand Response offset")
-						if !mo {
-							if err := device.SetDemandResponse(nctx, true, -2.0); err != nil {
-								slog.Error("unable to enable demand-response cooling", "error", err)
-							}
-						}
+					} else {
+						slog.Debug("Moderate export: Already in manual mode, maintaining current nudge")
 					}
 
 				case avgNetMW > DeepCoolMaxImportWatts:
 					// STATE: IMPORTING -> FAILSAFE / NORMAL
-					slog.Info("state: importing")
-					if !info.ScheduleEnabled || info.DRIsActive {
-						slog.Info("Importing: Disabling all overrides", "watts", avgNetMW/1000.0)
-						// reverting to failsafe does not check for monitor-only
+					if !info.ScheduleEnabled {
+						slog.Info("Importing: Snapping back to schedule settings", "watts", avgNetMW/1000.0)
 						if err := device.SetModeSchedule(nctx); err != nil {
 							slog.Error("unable to revert to schedule", "error", err)
-						}
-						if err := device.SetDemandResponse(nctx, false, 0); err != nil {
-							slog.Error("unable to clear demand response", "error", err)
 						}
 					}
 
 				default:
 					// STATE: NEUTRAL (Between -200W and +500W)
 					// Do nothing. Stay in whatever mode we are in to prevent rapid toggling.
-					slog.Info("Neutral power zone: maintaining current state")
+					slog.Debug("Neutral power zone: maintaining current state")
 				}
 				ncancel()
 			}

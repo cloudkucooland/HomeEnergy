@@ -10,6 +10,9 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
+// remember, we are stuck with PowerMW as miliwatts, not megawatts, all "watts" values are in mW.
+// this is due to the field name in the go-envoy library
+
 var envlog *slog.Logger
 
 func main() {
