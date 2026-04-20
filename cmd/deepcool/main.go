@@ -17,10 +17,11 @@ import (
 )
 
 const (
-	DeepCoolTemp           = 16.5               // need to be C even if the thermostat is set to display in F
-	DeepCoolHeatTemp       = DeepCoolTemp + 5.5 // Just needs to be more than DeepCoolTemp
-	DeepCoolMaxImportWatts = 500000             // if in deepcool mode, how much can we "overdraw" before switching to schedule?
-	DeepCoolMinExportWatts = -1100000           // if in schedule, how much do we need to be exporting before we start deepcool (negative for export)
+	DeepCoolTemp             = 16.5               // need to be C even if the thermostat is set to display in F
+	DeepCoolHeatTemp         = DeepCoolTemp + 5.5 // Just needs to be more than DeepCoolTemp
+	DeepCoolMaxImportWatts   = 500000             // if in deepcool mode, how much can we "overdraw" before switching to schedule?
+	DeepCoolMinExportWatts   = -1100000           // if in schedule, how much do we need to be exporting before we start deepcool (negative for export)
+	DeepCoolMinorExportWatts = -200000            // for demand-response-based "not-so-deep" cooling
 )
 
 func main() {
@@ -50,9 +51,18 @@ func run(ctx context.Context, cmd *cli.Command) error {
 		slog.Error("unable to connect to Daikin", "err", err)
 		return err
 	}
+	if len(d.Devices) == 0 {
+		return fmt.Errorf("no daikin devices found")
+	}
+	slog.Info("Starting deepcool", "daikin", d.Devices[0].Name)
 
 	influx := influxdb2.NewClient(os.Getenv("INFLUX_HOST"), os.Getenv("INFLUX_TOKEN"))
-	writeAPI := influx.WriteAPI(os.Getenv("INFLUX_ORG"), cmd.String("daikin-bucket"))
+	slog.Info("Setting up InfluxDB", "host", os.Getenv("INFLUX_HOST"), "bucket", cmd.String("daikin-bucket"))
+	ok, err := influx.Health(ctx)
+	if err != nil || ok.Status != "pass" {
+		slog.Error("influxdb health check failed", "error", err)
+	}
+	writeAPI := influx.WriteAPIBlocking(os.Getenv("INFLUX_ORG"), cmd.String("daikin-bucket"))
 	queryAPI := influx.QueryAPI(os.Getenv("INFLUX_ORG"))
 	defer influx.Close()
 
@@ -69,47 +79,107 @@ func run(ctx context.Context, cmd *cli.Command) error {
 				avgNetMW, err := getAveragePower(nctx, queryAPI)
 				if err != nil {
 					slog.Error("error getting average power", "err", err)
-					device.SetModeSchedule(ctx) // failsafe, use primary context
+					if err := device.SetModeSchedule(ctx); err != nil {
+						slog.Error("unable to switch to schedule", "error", err)
+					} // failsafe, use primary context
 					ncancel()
 					continue
 				}
 
 				info, err := device.GetInfo(nctx)
 				if err != nil {
-					slog.Error("error pooling daikin", "err", err)
-					device.SetModeSchedule(ctx) // failsafe, use primary context
+					slog.Error("error polling daikin", "err", err)
+					if err := device.SetModeSchedule(ctx); err != nil { // failsafe, use primary context
+						slog.Error("unable to switch to schedule", "error", err)
+					}
 					ncancel()
 					continue
 				}
-				logStats(writeAPI, device.Name, info)
+
+				if err := logStats(nctx, writeAPI, device.Name, info); err != nil {
+					slog.Error("unable to log to influx", "error", err)
+				}
 
 				if info.Mode != daikin.ModeCool {
-					slog.Error("deepcool disabled in auto/heat modes", "err", err)
+					slog.Info("deepcool disabled in auto/heat modes")
 					ncancel()
 					continue
 				}
 
-				isExportingSignificant := false
-				if !info.ScheduleEnabled {
-					// WE ARE ALREADY IN DEEP COOL.
-					// Stay in it as long as we aren't importing more than 500W.
-					// Logic: Keep true if net power is less than 500W (e.g., -2000 export up to +500 import)
-					isExportingSignificant = avgNetMW < DeepCoolMaxImportWatts
-				} else {
-					// WE ARE ON NORMAL SCHEDULE.
-					// Only engage if exporting more than 1.1kW.
-					// Logic: True only if net power is deep in the negatives (exporting).
-					isExportingSignificant = avgNetMW < DeepCoolMinExportWatts
-				}
-
-				if isExportingSignificant && info.ScheduleEnabled {
-					slog.Info("Export detected, engaging deep cool", "watts", avgNetMW/1000.0)
-					if !cmd.Bool("monitor-only") {
-						device.SetTemps(nctx, daikin.ModeCool, DeepCoolHeatTemp, DeepCoolTemp)
+				/* SetDenumidifySetpoint returns a 403 -- research in the go-daikin library
+				if info.IndoorHumidity > 60 && info.DehumSetpoint != 45 {
+					slog.Info("High humidity detected, lowering dehum setpoint", "current", info.IndoorHumidity)
+					if err := device.SetDehumidifySetpoint(nctx, 45); err != nil {
+						slog.Error("unable to lower dehum setpoint", "error", err)
 					}
-				} else if !isExportingSignificant && !info.ScheduleEnabled {
-					slog.Info("import detected, reverting to schedule", "watts", avgNetMW/1000.0)
-					device.SetModeSchedule(ctx)
+				} else if info.IndoorHumidity < 50 && info.DehumSetpoint != 55 {
+					slog.Info("Humidity stabilized, relaxing dehum setpoint")
+					if err := device.SetDehumidifySetpoint(nctx, 55); err != nil { // Return to a more efficient target
+						slog.Error("unable to restore dehum setpoint", "error", err)
+					}
+				} */
+
+				mo := cmd.Bool("monitor-only")
+
+				switch {
+				case avgNetMW < DeepCoolMinExportWatts:
+					// STATE: MAXIMUM EXPORT -> FULL DEEP COOL
+					slog.Info("state: maximum export")
+					if info.ScheduleEnabled {
+						slog.Info("Heavy export: Engaging Full Deep Cool", "watts", avgNetMW/1000.0)
+						if !mo {
+							if err := device.SetTemps(nctx, daikin.ModeCool, DeepCoolHeatTemp, DeepCoolTemp); err != nil {
+								slog.Error("unable to set deep cool temps", "error", err)
+							}
+						}
+					}
+					// Disable DR so it doesn't try to offset our already low manual setpoint
+					if info.DRIsActive && !mo {
+						if err := device.SetDemandResponse(nctx, false, 0); err != nil {
+							slog.Error("unable to clear demand-response settings", "error", err)
+						}
+					}
+
+				case avgNetMW < DeepCoolMinorExportWatts:
+					// STATE: MODERATE EXPORT -> SOFT COOL (DR)
+					slog.Info("state: moderate")
+					// If we were in Deep Cool, bring it back to schedule first
+					if !info.ScheduleEnabled {
+						slog.Info("Export reduced: Reverting to Schedule with DR Offset", "watts", avgNetMW/1000.0)
+						if !mo {
+							if err := device.SetModeSchedule(nctx); err != nil {
+								slog.Error("unable to revert to schedule", "error", err)
+							}
+						}
+					}
+					// Nudge the schedule down by 2 degrees
+					if !info.DRIsActive || info.DROffsetDegree != -2.0 {
+						slog.Info("Minor export: Applying -2.0C Demand Response offset")
+						if !mo {
+							if err := device.SetDemandResponse(nctx, true, -2.0); err != nil {
+								slog.Error("unable to enable demand-response cooling", "error", err)
+							}
+						}
+					}
+
+				case avgNetMW > DeepCoolMaxImportWatts:
+					// STATE: IMPORTING -> FAILSAFE / NORMAL
+					slog.Info("state: importing")
+					if !info.ScheduleEnabled || info.DRIsActive {
+						slog.Info("Importing: Disabling all overrides", "watts", avgNetMW/1000.0)
+						// reverting to failsafe does not check for monitor-only
+						if err := device.SetModeSchedule(nctx); err != nil {
+							slog.Error("unable to revert to schedule", "error", err)
+						}
+						if err := device.SetDemandResponse(nctx, false, 0); err != nil {
+							slog.Error("unable to clear demand response", "error", err)
+						}
+					}
+
+				default:
+					// STATE: NEUTRAL (Between -200W and +500W)
+					// Do nothing. Stay in whatever mode we are in to prevent rapid toggling.
+					slog.Info("Neutral power zone: maintaining current state")
 				}
 				ncancel()
 			}
@@ -117,7 +187,7 @@ func run(ctx context.Context, cmd *cli.Command) error {
 	}
 }
 
-func logStats(w api.WriteAPI, name string, info *daikin.Info) {
+func logStats(ctx context.Context, w api.WriteAPIBlocking, name string, info *daikin.Info) error {
 	p := influxdb2.NewPoint("daikin_stats",
 		map[string]string{"device": name},
 		map[string]interface{}{
@@ -127,9 +197,12 @@ func logStats(w api.WriteAPI, name string, info *daikin.Info) {
 			"hum_outdoor":      info.OutdoorHumidity,
 			"mode":             info.Mode,
 			"schedule_enabled": info.ScheduleEnabled,
+			"dr_active":        info.DRIsActive,
+			"dr_offset":        info.DROffsetDegree,
+			"dehum_setpoint":   info.DehumSetpoint,
 		},
 		time.Now())
-	w.WritePoint(p)
+	return w.WritePoint(ctx, p)
 }
 
 func getAveragePower(ctx context.Context, queryAPI api.QueryAPI) (float64, error) {

@@ -5,9 +5,9 @@ import (
 	"os"
 	"time"
 
+	"github.com/cloudkucooland/go-kasa"
 	"github.com/influxdata/influxdb-client-go/v2"
 	"github.com/influxdata/influxdb-client-go/v2/api"
-	"github.com/cloudkucooland/go-kasa"
 	"github.com/urfave/cli/v3"
 )
 
@@ -28,10 +28,10 @@ func setupdb(ctx context.Context, cmd *cli.Command) error {
 	org := os.Getenv("INFLUX_ORG")
 	bucket := os.Getenv("INFLUX_BUCKET")
 
-	emlog.InfoContext(ctx, "Setting up Kasa InfluxDB V2 Client", "host", host, "bucket", bucket)
+	emlog.InfoContext(ctx, "Setting up Kasa InfluxDB", "host", host, "bucket", bucket)
 
 	client = influxdb2.NewClient(host, token)
-	
+
 	// Use the async WriteAPI to handle batching automatically
 	writeAPI = client.WriteAPI(org, bucket)
 
@@ -46,8 +46,6 @@ func setupdb(ctx context.Context, cmd *cli.Command) error {
 }
 
 func startDBWriter(ctx context.Context, r <-chan emeterdata) {
-	emlog.Info("Kasa DB Writer started (V2 Downgrade)")
-
 	for {
 		select {
 		case <-ctx.Done():
@@ -58,11 +56,11 @@ func startDBWriter(ctx context.Context, r <-chan emeterdata) {
 			if !ok {
 				return
 			}
-			
+
 			// Explicit uint64 casts ensure the 'u' suffix is added in Line Protocol
 			p := influxdb2.NewPoint("emeter",
 				map[string]string{
-					"device": v.DeviceID, 
+					"device": v.DeviceID,
 					"alias":  v.Alias,
 				},
 				map[string]interface{}{

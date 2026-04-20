@@ -23,7 +23,7 @@ func setupdb(ctx context.Context, cmd *cli.Command) error {
 	org := os.Getenv("INFLUX_ORG")
 	bucket := os.Getenv("INFLUX_BUCKET")
 
-	envlog.InfoContext(ctx, "Setting up InfluxDB V2 Client", "host", host, "bucket", bucket)
+	envlog.InfoContext(ctx, "Setting up InfluxDB", "host", host, "bucket", bucket)
 
 	client = influxdb2.NewClient(host, token)
 
@@ -44,8 +44,6 @@ func setupdb(ctx context.Context, cmd *cli.Command) error {
 }
 
 func startDBWriter(ctx context.Context, r <-chan envoydata) {
-	envlog.Info("DB Writer started (V2 Downgrade)")
-
 	for {
 		select {
 		case <-ctx.Done():

@@ -55,7 +55,7 @@ func setupenvoy(ctx context.Context, cmd *cli.Command) error {
 }
 
 func query(ctx context.Context, results chan envoydata) error {
-	pctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	pctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
 	p, err := env.Production(pctx)
@@ -69,7 +69,7 @@ func query(ctx context.Context, results chan envoydata) error {
 		P:        p,
 	}
 
-	envlog.Info("Query successful, sending to channel", "points", len(p.Production))
+	envlog.Debug("Query successful, sending to channel", "points", len(p.Production))
 	results <- e
 	return nil
 }

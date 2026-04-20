@@ -4,10 +4,8 @@ github.com/apapsch/go-jsonmerge/v2 v2.0.0/go.mod h1:lvDnEdqiQrp0O42VQGgmlKpxL1AP
 github.com/bmatcuk/doublestar v1.1.1/go.mod h1:UD6OnuiIn0yFxxA2le/rnRU1G4RaI4UvFv1sNto9p6w=
 github.com/brutella/dnssd v1.2.14 h1:qLpTnRTm5peo2jA30hqMIbCuWn8x3sFg3e9o9ODOobw=
 github.com/brutella/dnssd v1.2.14/go.mod h1:tG4GE8orv6+irE5rdsNgb6MJSxm6cyMUKdC5jmD22gk=
-github.com/cloudkucooland/go-daikin v0.0.0-20260418183700-5574f1af28bc h1:iXJjNID42hEL0W3kfLXhvrvUehjAevbzc/bGdPEY/xw=
-github.com/cloudkucooland/go-daikin v0.0.0-20260418183700-5574f1af28bc/go.mod h1:uNYcs2XIEfsI3T7jN+6+PGPui15DHxdM6fjZwbBwp6E=
-github.com/cloudkucooland/go-daikin v0.0.0-20260418200159-87c41b88b96e h1:/qWRvjmBgqaCHqI72zde3icpE7/YpJj9Elj3iSQOkug=
-github.com/cloudkucooland/go-daikin v0.0.0-20260418200159-87c41b88b96e/go.mod h1:uNYcs2XIEfsI3T7jN+6+PGPui15DHxdM6fjZwbBwp6E=
+github.com/cloudkucooland/go-daikin v0.0.0-20260419223518-dfe9e7bb2849 h1:qJwupKTf3WccrXTBGYX1DPkjRCAKGV0BgybzUc6dzXc=
+github.com/cloudkucooland/go-daikin v0.0.0-20260419223518-dfe9e7bb2849/go.mod h1:uNYcs2XIEfsI3T7jN+6+PGPui15DHxdM6fjZwbBwp6E=
 github.com/cloudkucooland/go-envoy v0.0.0-20260410020431-53a2f2d66cf0 h1:XXm7w1o/G6N/bMCIBvXvaKwKjz1QYJsv/P6pH0xBs6U=
 github.com/cloudkucooland/go-envoy v0.0.0-20260410020431-53a2f2d66cf0/go.mod h1:2lAGKlKBG1fiQANJTxKWt+qxAYl8c3NrUSaFuznvJpo=
 github.com/cloudkucooland/go-kasa v0.0.0-20260409231212-572c4a0bf3b9 h1:2MyUVeEJmuiNJsYXQaHCC/LTsRPClMTehSYPlRTpMn0=

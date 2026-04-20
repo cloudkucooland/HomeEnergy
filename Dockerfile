@@ -34,4 +34,4 @@ CMD ["./envoy-logger", "startup", "--token", "/data/envoy.jwt"]
 FROM base-runtime AS deepcool-run
 COPY --from=deepcool-builder /deepcool .
 USER appuser
-CMD ["./deepcool", "--monitor-only"]
+CMD ["./deepcool"]

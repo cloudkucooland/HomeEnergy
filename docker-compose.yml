@@ -18,6 +18,11 @@ services:
       resources:
         limits:
           memory: "16g"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8086/health"]
+      interval: 5s
+      timeout: 2s
+      retries: 10
 
   grafana:
     image: grafana/grafana:latest
@@ -57,9 +62,13 @@ services:
       resources:
         limits:
           memory: "16m"
-    #depends_on:
-      #influxdb:
-        #condition: service_healthy
+    depends_on:
+      influxdb:
+        condition: service_healthy
+      emeter-logger:
+        condition: service_started
+      envoy-logger:
+        condition: service_started
 
   emeter-logger:
     build:
@@ -78,9 +87,9 @@ services:
       resources:
         limits:
           memory: "16m"
-    #depends_on:
-      #influxdb:
-        #condition: service_healthy
+    depends_on:
+      influxdb:
+        condition: service_healthy
 
   envoy-logger:
     build:
@@ -101,9 +110,9 @@ services:
       resources:
         limits:
           memory: "16m"
-    #depends_on:
-      #influxdb:
-        #condition: service_healthy
+    depends_on:
+      influxdb:
+        condition: service_healthy
 
 volumes:
   influxdb_data:
