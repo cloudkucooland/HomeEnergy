@@ -2,6 +2,8 @@ github.com/RaveNoX/go-jsoncommentstrip v1.0.0/go.mod h1:78ihd09MekBnJnxpICcwzCMz
 github.com/apapsch/go-jsonmerge/v2 v2.0.0 h1:axGnT1gRIfimI7gJifB699GoE/oq+F2MU7Dml6nw9rQ=
 github.com/apapsch/go-jsonmerge/v2 v2.0.0/go.mod h1:lvDnEdqiQrp0O42VQGgmlKpxL1AP2+08jFMw88y4klk=
 github.com/bmatcuk/doublestar v1.1.1/go.mod h1:UD6OnuiIn0yFxxA2le/rnRU1G4RaI4UvFv1sNto9p6w=
+github.com/briandowns/openweathermap v0.21.1 h1:TPbuixuF+aGJP1mpgTNny6eUkdbvj7gqODGXkwhss48=
+github.com/briandowns/openweathermap v0.21.1/go.mod h1:0GLnknqicWxXnGi1IqoOaZIw+kIe5hkt+YM5WY3j8+0=
 github.com/brutella/dnssd v1.2.14 h1:qLpTnRTm5peo2jA30hqMIbCuWn8x3sFg3e9o9ODOobw=
 github.com/brutella/dnssd v1.2.14/go.mod h1:tG4GE8orv6+irE5rdsNgb6MJSxm6cyMUKdC5jmD22gk=
 github.com/cloudkucooland/go-daikin v0.0.0-20260420020405-2b73bef50f26 h1:BlunQovdqFOBGH1J5lDyUnQlEO0rU2vHDsMvyP3LwvE=
