@@ -274,6 +274,181 @@
             "barAlignment": 0,
             "barWidthFactor": 0.6,
             "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "unaccounted_p"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Unaccounted Power"
+              },
+              {
+                "id": "unit",
+                "value": "watt"
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "Watts"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "outdoor_t"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Outdoor Temp"
+              },
+              {
+                "id": "unit",
+                "value": "celsius"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "°C"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "soc_val"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "State of Charge"
+              },
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "hidden"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 11,
+        "w": 12,
+        "x": 0,
+        "y": 11
+      },
+      "id": 4,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "last"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.4.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "InfluxDB_Energy"
+          },
+          "query": "envoy = from(bucket: \"energy\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r.alias =~ /total-consumption-L[12]/)\n  |> aggregateWindow(every: 10m, fn: mean, createEmpty: true)\n  |> fill(value: 0.0)\n  |> group(columns: [\"_time\"])\n  |> sum()\n  |> group()\n  |> set(key: \"_field\", value: \"e\")\n\nplugs = from(bucket: \"energy\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"emeter\" and r._field == \"PowerMW\")\n  |> filter(fn: (r) => r.alias !~ /total-consumption|production|net-consumption/)\n  |> aggregateWindow(every: 10m, fn: mean, createEmpty: true)\n  |> fill(value: 0.0)\n  |> group(columns: [\"_time\"])\n  |> sum()\n  |> group()\n  |> set(key: \"_field\", value: \"p\")\n\nunion(tables: [envoy, plugs])\n  |> pivot(rowKey:[\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> map(fn: (r) => ({ _time: r._time, unaccounted_p: (float(v: r.e) - float(v: r.p)) / 1000.0 }))\n  |> keep(columns: [\"_time\", \"unaccounted_p\"])",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "InfluxDB_Energy"
+          },
+          "query": "from(bucket: \"daikin\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"daikin_stats\")\n  |> filter(fn: (r) => r[\"_field\"] == \"temp_outdoor\")\n  |> aggregateWindow(every: 10m, fn: mean, createEmpty: true)\n  |> map(fn: (r) => ({ _time: r._time, outdoor_t: r._value }))\n  |> keep(columns: [\"_time\", \"outdoor_t\"])",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "InfluxDB_Energy"
+          },
+          "query": "from(bucket: \"daikin\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"daikin_stats\")\n  |> filter(fn: (r) => r[\"_field\"] == \"temp_indoor\")\n  |> aggregateWindow(every: 10m, fn: mean, createEmpty: true)\n  |> fill(value: 22.5)\n  |> map(fn: (r) => ({ \n      _time: r._time, \n      soc_val: (22.5 - float(v: r._value)) / (22.5 - 16.5) * 100.0 \n  }))\n  |> keep(columns: [\"_time\", \"soc_val\"])",
+          "refId": "C"
+        }
+      ],
+      "title": "Unaccounted Power & Temperature Trends",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "InfluxDB_Energy"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
             "hideFrom": {
@@ -318,9 +493,9 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 9,
-        "w": 24,
-        "x": 0,
+        "h": 11,
+        "w": 12,
+        "x": 12,
         "y": 11
       },
       "id": 1,
@@ -358,11 +533,235 @@
       ],
       "title": "DeepCool Running",
       "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "InfluxDB_Energy"
+      },
+      "description": "Somehow it should be possible to find the difference between these two.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "fillOpacity": 15,
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "pointShape": "circle",
+            "pointSize": {
+              "fixed": 5
+            },
+            "pointStrokeWidth": 2,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "show": "points"
+          },
+          "fieldMinMax": false,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "green",
+                "value": 18
+              },
+              {
+                "color": "#EAB839",
+                "value": 24
+              },
+              {
+                "color": "#EF843C",
+                "value": 28
+              },
+              {
+                "color": "#E24D42",
+                "value": 30
+              },
+              {
+                "color": "red",
+                "value": 34
+              }
+            ]
+          },
+          "unit": "sishort"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "C Value"
+            },
+            "properties": [
+              {
+                "id": "custom.axisLabel",
+                "value": "Watts"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value 3"
+            },
+            "properties": [
+              {
+                "id": "custom.axisLabel",
+                "value": "degC"
+              },
+              {
+                "id": "unit",
+                "value": "none"
+              },
+              {
+                "id": "custom.axisSoftMin",
+                "value": 5
+              },
+              {
+                "id": "custom.axisSoftMax",
+                "value": 45
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 22
+      },
+      "id": 3,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "mapping": "manual",
+        "series": [
+          {
+            "color": {
+              "matcher": {
+                "id": "byName",
+                "options": "Value 3"
+              }
+            },
+            "frame": {
+              "matcher": {
+                "id": "byIndex",
+                "options": 0
+              }
+            },
+            "x": {
+              "matcher": {
+                "id": "byName",
+                "options": "Value 3"
+              }
+            },
+            "y": {
+              "matcher": {
+                "id": "byName",
+                "options": "C Value"
+              }
+            }
+          }
+        ],
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.4.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "InfluxDB_Energy"
+          },
+          "query": "from(bucket: \"energy\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r.alias =~ /total-consumption-L[12]/)\n  // Average the Envoy phases over the window\n  |> aggregateWindow(every: 10m, fn: mean, createEmpty: true)\n  |> fill(value: 0.0)\n  // Sum L1 + L2\n  |> group(columns: [\"_time\"])\n  |> sum()\n  |> group()\n  |> map(fn: (r) => ({ _time: r._time, _value: float(v: r._value) / 1000.0 }))",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "InfluxDB_Energy"
+          },
+          "query": "from(bucket: \"energy\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"emeter\" and r._field == \"PowerMW\")\n  |> filter(fn: (r) => r.alias !~ /total-consumption|production|net-consumption/)\n  |> aggregateWindow(every: 10m, fn: mean, createEmpty: true)\n  |> fill(value: 0.0)\n  // STEP 2: Sum all the averaged plugs together\n  |> group(columns: [\"_time\"])\n  |> sum()\n  |> group()\n  |> map(fn: (r) => ({ _time: r._time, _value: float(v: r._value) / 1000.0 }))",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "name": "Expression",
+            "type": "__expr__",
+            "uid": "__expr__"
+          },
+          "expression": "$A - $B",
+          "refId": "C",
+          "type": "math"
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "InfluxDB_Energy"
+          },
+          "query": "from(bucket: \"daikin\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"daikin_stats\")\n  |> filter(fn: (r) => r[\"_field\"] == \"temp_outdoor\")\n  |> aggregateWindow(every: 10m, fn: mean, createEmpty: true)\n  |> group()\n  |> keep(columns: [\"_time\", \"_value\"])",
+          "refId": "D"
+        }
+      ],
+      "title": "Unaccounted Power V Temp",
+      "transformations": [
+        {
+          "filter": {
+            "id": "byRefId",
+            "options": "/^(?:A|B|C)$/"
+          },
+          "id": "renameByRegex",
+          "options": {
+            "regex": ".*alias=\"([^\"]+)\".*device=\".{37}(.{3})\".*",
+            "renamePattern": "$1 ($2)"
+          },
+          "topic": "series"
+        },
+        {
+          "filter": {
+            "id": "byRefId",
+            "options": "/^(?:A|B|C)$/"
+          },
+          "id": "renameByRegex",
+          "options": {
+            "regex": ".*alias=\"([^\"]+)\"",
+            "renamePattern": "$1 ($2)"
+          },
+          "topic": "series"
+        },
+        {
+          "id": "joinByField",
+          "options": {}
+        }
+      ],
+      "type": "xychart"
     }
   ],
   "preload": false,
   "schemaVersion": 42,
-  "tags": [],
+  "tags": ["modeling"],
   "templating": {
     "list": []
   },
@@ -374,6 +773,6 @@
   "timezone": "browser",
   "title": "DeepCool modeling",
   "uid": "ad2wrgp",
-  "version": 28,
+  "version": 32,
   "weekStart": ""
 }

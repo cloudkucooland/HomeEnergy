@@ -559,7 +559,7 @@
   ],
   "preload": false,
   "schemaVersion": 42,
-  "tags": [],
+  "tags": [ "reporting" ],
   "templating": {
     "list": [
       {
