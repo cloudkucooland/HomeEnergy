@@ -26,6 +26,7 @@ const (
 	DeepCoolMinExportWatts      = -1100000           // if in schedule, how much do we need to be exporting before we start deepcool (negative for export)
 	DeepCoolModerateExportWatts = -200000            // for "not-so-deep" cooling
 	DeepCoolModerateTempOffset  = 2.0                // how much to bump down in moderate mode
+	DeepCoolMinOutdoorTemp      = 22.0               // Don't deepcool if it's not hot -- TODO pull OWM and check today/tomorrow
 )
 
 func main() {
@@ -34,7 +35,7 @@ func main() {
 		Usage: "Deep cool house when exporting; depends on Daikin and InfluxDB",
 		Flags: []cli.Flag{
 			&cli.BoolFlag{Name: "monitor-only", Value: false, Usage: "monitor without engaging deep cooling"},
-			// &cli.StringFlag{Name: "energy-bucket", Value: "energy", Usage: "influxdb bucket for energy data (ro)"},
+			&cli.StringFlag{Name: "energy-bucket", Value: "energy", Sources: cli.EnvVars("INFLUX_BUCKET"), Usage: "influxdb bucket for energy data (ro)"},
 			&cli.StringFlag{Name: "daikin-bucket", Value: "daikin", Usage: "influxdb bucket for daikin data (rw)"},
 		},
 		Action: run,
@@ -61,7 +62,7 @@ func run(ctx context.Context, cmd *cli.Command) error {
 	slog.Info("Starting deepcool", "daikin", d.Devices[0].Name)
 
 	influx := influxdb2.NewClient(os.Getenv("INFLUX_HOST"), os.Getenv("INFLUX_TOKEN"))
-	slog.Info("Setting up InfluxDB", "host", os.Getenv("INFLUX_HOST"), "daikin-bucket", cmd.String("daikin-bucket"), "energy-bucket", os.Getenv("INFLUX_BUCKET"))
+	slog.Info("Setting up InfluxDB", "host", os.Getenv("INFLUX_HOST"), "daikin-bucket", cmd.String("daikin-bucket"), "energy-bucket", cmd.String("energy-bucket"))
 	ok, err := influx.Health(ctx)
 	if err != nil || ok.Status != "pass" {
 		slog.Error("influxdb health check failed", "error", err)
@@ -80,7 +81,7 @@ func run(ctx context.Context, cmd *cli.Command) error {
 		case <-ticker.C:
 			for _, device := range d.Devices {
 				nctx, ncancel := context.WithTimeout(ctx, 30*time.Second)
-				avgNetMW, err := getAveragePower(nctx, queryAPI)
+				avgNetMW, err := getAveragePower(nctx, cmd, queryAPI)
 				if err != nil {
 					slog.Error("error getting average power", "err", err)
 					if err := device.SetModeSchedule(ctx); err != nil { // failsafe, use primary context
@@ -104,10 +105,23 @@ func run(ctx context.Context, cmd *cli.Command) error {
 					slog.Error("unable to log to influx", "error", err)
 				}
 
-				slog.Info("tick", "device", device.Name, "net_watts", fmt.Sprintf("%.2f", avgNetMW/1000.0), "mode", info.Mode, "temp", info.IndoorTemp)
+				slog.Info("tick", "device", device.Name, "net_watts", fmt.Sprintf("%.2f", avgNetMW/1000.0), "mode", info.Mode, "indoor temp", info.IndoorTemp, "outdoor temp", info.OutdoorTemp)
 
 				if info.Mode != daikin.ModeCool {
 					slog.Info("deepcool disabled in auto/heat modes")
+					ncancel()
+					continue
+				}
+
+				if info.OutdoorTemp < DeepCoolMinOutdoorTemp {
+					slog.Info("outdoor temp below threshold, skipping deepcool logic",
+						"outdoor", info.OutdoorTemp, "threshold", DeepCoolMinOutdoorTemp)
+
+					if !info.ScheduleEnabled {
+						if err := device.SetModeSchedule(nctx); err != nil {
+							slog.Error("unable to revert to schedule", "error", err)
+						}
+					}
 					ncancel()
 					continue
 				}
@@ -202,7 +216,7 @@ func logStats(ctx context.Context, w api.WriteAPIBlocking, name string, info *da
 	return w.WritePoint(ctx, p)
 }
 
-func getAveragePower(ctx context.Context, queryAPI api.QueryAPI) (float64, error) {
+func getAveragePower(ctx context.Context, cmd *cli.Command, queryAPI api.QueryAPI) (float64, error) {
 	query := fmt.Sprintf(`
 		from(bucket: "%s")
 		|> range(start: -15m)
@@ -211,7 +225,7 @@ func getAveragePower(ctx context.Context, queryAPI api.QueryAPI) (float64, error
 		|> filter(fn: (r) => r["_field"] == "PowerMW")
 		|> mean()
 		|> group()
-		|> sum()`, os.Getenv("INFLUX_BUCKET"))
+		|> sum()`, cmd.String("energy-bucket"))
 
 	result, err := queryAPI.Query(ctx, query)
 	if err != nil {
