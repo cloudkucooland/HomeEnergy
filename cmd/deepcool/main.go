@@ -20,13 +20,14 @@ import (
 // this is due to the field name in the go-envoy library
 
 const (
-	DeepCoolTemp                = 16.5               // need to be C even if the thermostat is set to display in F
-	DeepCoolHeatTemp            = DeepCoolTemp + 5.5 // Just needs to be more than DeepCoolTemp
-	DeepCoolMaxImportWatts      = 500000             // if in deepcool mode, how much can we "overdraw" before switching to schedule?
-	DeepCoolMinExportWatts      = -1100000           // if in schedule, how much do we need to be exporting before we start deepcool (negative for export)
-	DeepCoolModerateExportWatts = -200000            // for "not-so-deep" cooling
-	DeepCoolModerateTempOffset  = 2.0                // how much to bump down in moderate mode
-	DeepCoolMinOutdoorTemp      = 22.0               // Don't deepcool if it's not hot -- TODO pull OWM and check today/tomorrow
+	DeepCoolTemp                 = 16.5               // need to be C even if the thermostat is set to display in F
+	DeepCoolHeatTemp             = DeepCoolTemp + 5.5 // Just needs to be more than DeepCoolTemp
+	DeepCoolMaxImportWatts       = 500000             // if in deepcool mode, how much can we "overdraw" before switching to schedule?
+	DeepCoolMinExportWatts       = -1100000           // if in schedule, how much do we need to be exporting before we start deepcool (negative for export)
+	DeepCoolModerateExportWatts  = -200000            // for "not-so-deep" cooling
+	DeepCoolModerateTempOffset   = 2.0                // how much to bump down in moderate mode
+	DeepCoolMinOutdoorTemp       = 22.0               // Don't deepcool if it's not hot -- TODO pull OWM and check today/tomorrow
+	DeepCoolOverrideNightLowTemp = 18.0               // Don't deepcool if tonight will be cool anyway
 )
 
 func main() {
@@ -37,6 +38,7 @@ func main() {
 			&cli.BoolFlag{Name: "monitor-only", Value: false, Usage: "monitor without engaging deep cooling"},
 			&cli.StringFlag{Name: "energy-bucket", Value: "energy", Sources: cli.EnvVars("INFLUX_BUCKET"), Usage: "influxdb bucket for energy data (ro)"},
 			&cli.StringFlag{Name: "daikin-bucket", Value: "daikin", Usage: "influxdb bucket for daikin data (rw)"},
+			&cli.StringFlag{Name: "weather-bucket", Value: "weather", Sources: cli.EnvVars("WEATHER_BUCKET"), Usage: "influxdb bucket for weather data (rw)"},
 		},
 		Action: run,
 	}
@@ -68,17 +70,33 @@ func run(ctx context.Context, cmd *cli.Command) error {
 		slog.Error("influxdb health check failed", "error", err)
 	}
 	writeAPI := influx.WriteAPIBlocking(os.Getenv("INFLUX_ORG"), cmd.String("daikin-bucket"))
+	weatherWriteAPI := influx.WriteAPIBlocking(os.Getenv("INFLUX_ORG"), cmd.String("weather-bucket"))
 	queryAPI := influx.QueryAPI(os.Getenv("INFLUX_ORG"))
 	defer influx.Close()
 
 	ticker := time.NewTicker(10 * time.Minute)
 	defer ticker.Stop()
 
+	i := 0
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
 		case <-ticker.C:
+			// Fetch weather context once per hour
+			var forecast *Forecast = nil
+			if i%4 == 0 {
+				forecast, err = fetchForecast(ctx)
+				if err != nil {
+					slog.Error("unable to fetch weather forecast", "error", err)
+				} else {
+					if err := logForecast(ctx, weatherWriteAPI, forecast); err != nil {
+						slog.Error("unable to log forecast", "error", err)
+					}
+				}
+			}
+			i++
+
 			for _, device := range d.Devices {
 				nctx, ncancel := context.WithTimeout(ctx, 30*time.Second)
 				avgNetMW, err := getAveragePower(nctx, cmd, queryAPI)
@@ -116,6 +134,19 @@ func run(ctx context.Context, cmd *cli.Command) error {
 				if info.OutdoorTemp < DeepCoolMinOutdoorTemp {
 					slog.Info("outdoor temp below threshold, skipping deepcool logic",
 						"outdoor", info.OutdoorTemp, "threshold", DeepCoolMinOutdoorTemp)
+
+					if !info.ScheduleEnabled {
+						if err := device.SetModeSchedule(nctx); err != nil {
+							slog.Error("unable to revert to schedule", "error", err)
+						}
+					}
+					ncancel()
+					continue
+				}
+
+				if forecast != nil && forecast.Low < DeepCoolOverrideNightLowTemp {
+					slog.Info("Tonight will be cool, skipping deepcool logic",
+						"forecast_low", forecast.Low, "threshold", DeepCoolOverrideNightLowTemp)
 
 					if !info.ScheduleEnabled {
 						if err := device.SetModeSchedule(nctx); err != nil {
