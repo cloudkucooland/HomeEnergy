@@ -33,20 +33,17 @@ func fetchForecast(ctx context.Context) (*Forecast, error) {
 		return nil, err
 	}
 
-	if err := w.DailyByCoordinates(
-		&owm.Coordinates{
-			Longitude: -112.07,
-			Latitude:  33.45,
-		},
-		5, // five days forecast
-	); err != nil {
+	if err := w.DailyByZipcode(os.Getenv("OWM_ZIPCODE"), "US", 5); err != nil {
 		return nil, err
 	}
-	fmt.Println(w)
+    ff := w.ForecastWeatherJson.(*owm.Forecast5WeatherData)
+
+    // 0 seems to be "today", is 1 "tomorrow"?
+    tomorrow := 1 
 	var f = Forecast{
-		High:    23,
-		Low:     16,
-		Cloudy:  false,
+		High:    ff.List[tomorrow].Main.TempMax,
+		Low:     ff.List[tomorrow].Main.TempMin,
+		Cloudy:  ff.List[tomorrow].Clouds.All > DeepCoolCloudyThreshold,
 		ValidAt: time.Now(),
 	}
 	return &f, nil
@@ -66,3 +63,4 @@ func logForecast(ctx context.Context, w api.WriteAPIBlocking, f *Forecast) error
 		f.ValidAt)
 	return w.WritePoint(ctx, p)
 }
+

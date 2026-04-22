@@ -28,6 +28,7 @@ const (
 	DeepCoolModerateTempOffset   = 2.0                // how much to bump down in moderate mode
 	DeepCoolMinOutdoorTemp       = 22.0               // Don't deepcool if it's not hot -- TODO pull OWM and check today/tomorrow
 	DeepCoolOverrideNightLowTemp = 18.0               // Don't deepcool if tonight will be cool anyway
+    DeepCoolCloudyThreshold = 84 // 0-100, 84 is "broken clouds"
 )
 
 func main() {
@@ -77,15 +78,17 @@ func run(ctx context.Context, cmd *cli.Command) error {
 	ticker := time.NewTicker(10 * time.Minute)
 	defer ticker.Stop()
 
+
 	i := 0
+    forecast, _ := fetchForecast(ctx) // testing
+
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
 		case <-ticker.C:
 			// Fetch weather context once per hour
-			var forecast *Forecast = nil
-			if i%4 == 0 {
+			if i%6 == 0 {
 				forecast, err = fetchForecast(ctx)
 				if err != nil {
 					slog.Error("unable to fetch weather forecast", "error", err)
@@ -143,6 +146,8 @@ func run(ctx context.Context, cmd *cli.Command) error {
 					ncancel()
 					continue
 				}
+
+                slog.Info("Tomorrow forecast", "high", forecast.High, "low", forecast.Low, "cloudy", forecast.Cloudy)
 
 				if forecast != nil && forecast.Low < DeepCoolOverrideNightLowTemp {
 					slog.Info("Tonight will be cool, skipping deepcool logic",
