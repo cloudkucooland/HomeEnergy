@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"time"
 
@@ -32,6 +33,11 @@ func setupdb(ctx context.Context, cmd *cli.Command) error {
 
 	client = influxdb2.NewClient(host, token)
 
+	ok, err := client.Health(ctx)
+	if err != nil || ok.Status != "pass" {
+		return fmt.Errorf("influxdb health check failed: %w", err)
+	}
+
 	// Use the async WriteAPI to handle batching automatically
 	writeAPI = client.WriteAPI(org, bucket)
 
@@ -57,17 +63,17 @@ func startDBWriter(ctx context.Context, r <-chan emeterdata) {
 				return
 			}
 
-			// Explicit uint64 casts ensure the 'u' suffix is added in Line Protocol
+			// Explicit int64 casts ensure the 'i' suffix is added in Line Protocol
 			p := influxdb2.NewPoint("emeter",
 				map[string]string{
 					"device": v.DeviceID,
 					"alias":  v.Alias,
 				},
 				map[string]interface{}{
-					"slot":      uint64(v.R.Slot),
-					"VoltageMV": uint64(v.R.VoltageMV),
-					"CurrentMA": uint64(v.R.CurrentMA),
-					"PowerMW":   uint64(v.R.PowerMW),
+					"slot":      int64(v.R.Slot),
+					"VoltageMV": int64(v.R.VoltageMV),
+					"CurrentMA": int64(v.R.CurrentMA),
+					"PowerMW":   int64(v.R.PowerMW),
 				},
 				time.Now())
 

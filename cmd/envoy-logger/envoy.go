@@ -38,13 +38,10 @@ func setupenvoy(ctx context.Context, cmd *cli.Command) error {
 			return err
 		}
 
-		newfile, err := os.OpenFile(cmd.String("token"), os.O_RDWR|os.O_CREATE, 0600)
+		err = os.WriteFile(cmd.String("token"), []byte(token), 0600)
 		if err != nil {
 			return err
 		}
-		defer newfile.Close()
-
-		newfile.WriteString(token)
 	default:
 		envlog.WarnContext(ctx, "token cache does not exist", "file", cmd.String("token"), "value", err)
 		return err

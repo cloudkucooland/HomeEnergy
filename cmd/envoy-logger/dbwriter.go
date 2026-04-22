@@ -69,10 +69,8 @@ func processLines(collections []envoy.Entry, deviceID string) {
 		}
 		for j, k := range i.Lines {
 			power := k.WNow * 1000
-			if power < 0 {
-				power = 0
-			}
 
+			// Explicit int64 casts ensure the 'i' suffix is added in Line Protocol
 			p := influxdb2.NewPoint("emeter",
 				map[string]string{
 					"device": deviceID,
@@ -80,10 +78,10 @@ func processLines(collections []envoy.Entry, deviceID string) {
 					"phase":  fmt.Sprintf("L%d", j+1),
 				},
 				map[string]interface{}{
-					"slot":      uint64(j),
-					"VoltageMV": uint64(k.RmsVoltage * 1000),
-					"CurrentMA": uint64(k.RmsCurrent * 1000),
-					"PowerMW":   uint64(power),
+					"slot":      int64(j),
+					"VoltageMV": int64(k.RmsVoltage * 1000),
+					"CurrentMA": int64(k.RmsCurrent * 1000),
+					"PowerMW":   int64(power),
 				},
 				time.Now())
 

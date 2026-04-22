@@ -128,38 +128,8 @@ func run(ctx context.Context, cmd *cli.Command) error {
 
 				slog.Info("tick", "device", device.Name, "net_watts", fmt.Sprintf("%.2f", avgNetMW/1000.0), "mode", info.Mode, "indoor temp", info.IndoorTemp, "outdoor temp", info.OutdoorTemp)
 
-				if info.Mode != daikin.ModeCool {
-					slog.Info("deepcool disabled in auto/heat modes")
-					ncancel()
-					continue
-				}
-
-				if info.OutdoorTemp < DeepCoolMinOutdoorTemp {
-					slog.Info("outdoor temp below threshold, skipping deepcool logic",
-						"outdoor", info.OutdoorTemp, "threshold", DeepCoolMinOutdoorTemp)
-
-					if !info.ScheduleEnabled {
-						if err := device.SetModeSchedule(nctx); err != nil {
-							slog.Error("unable to revert to schedule", "error", err)
-						}
-					}
-					ncancel()
-					continue
-				}
-
-                slog.Info("Tomorrow forecast", "high", forecast.High, "low", forecast.Low, "cloudy", forecast.Cloudy)
-
-				if forecast != nil && forecast.Low < DeepCoolOverrideNightLowTemp {
-					slog.Info("Tonight will be cool, skipping deepcool logic",
-						"forecast_low", forecast.Low, "threshold", DeepCoolOverrideNightLowTemp)
-
-					if !info.ScheduleEnabled {
-						if err := device.SetModeSchedule(nctx); err != nil {
-							slog.Error("unable to revert to schedule", "error", err)
-						}
-					}
-					ncancel()
-					continue
+				if forecast != nil {
+					slog.Info("Tomorrow forecast", "high", forecast.High, "low", forecast.Low, "cloudy", forecast.Cloudy)
 				}
 
 				/* SetDenumidifySetpoint returns a 403 -- research in the go-daikin library
@@ -176,57 +146,41 @@ func run(ctx context.Context, cmd *cli.Command) error {
 				} */
 
 				mo := cmd.Bool("monitor-only")
+				action := evaluateCoolingAction(avgNetMW, info, forecast)
 
-				switch {
-				case avgNetMW < DeepCoolMinExportWatts:
-					// STATE: MAXIMUM EXPORT -> FULL DEEP COOL
-					if info.ScheduleEnabled {
-						slog.Info("Heavy export: Engaging Full Deep Cool", "watts", avgNetMW/1000.0)
-						if !mo {
-							if err := device.SetTemps(nctx, daikin.ModeCool, DeepCoolHeatTemp, DeepCoolTemp); err != nil {
-								slog.Error("unable to set deep cool temps", "error", err)
-							}
-						}
-					}
-
-				case avgNetMW < DeepCoolModerateExportWatts:
-					// STATE: MODERATE EXPORT -> RELATIVE NUDGE
-					// Logic: If we are on schedule, drop 2 degrees and go manual.
-					// If we are already manual, we assume we've already nudged (or are in DeepCool).
-					// Demand-Response does not work on my system, do it manually
-					if info.ScheduleEnabled {
-						slog.Info("Moderate export: Nudging setpoints down 2.0C", "watts", avgNetMW/1000.0)
-						if !mo {
-							// We maintain the heat/cool spread but drop the floor
-							newHeat := info.HeatSetpoint - DeepCoolModerateTempOffset
-							newCool := info.CoolSetpoint - DeepCoolModerateTempOffset
-
-							// Boundary safety check using the device's own reported limits
-							if newCool < info.SetPointMinimum {
-								newCool = info.SetPointMinimum
-							}
-
-							if err := device.SetTemps(nctx, info.Mode, newHeat, newCool); err != nil {
-								slog.Error("unable to apply moderate nudge", "error", err)
-							}
-						}
-					} else {
-						slog.Debug("Moderate export: Already in manual mode, maintaining current nudge")
-					}
-
-				case avgNetMW > DeepCoolMaxImportWatts:
-					// STATE: IMPORTING -> FAILSAFE / NORMAL
-					if !info.ScheduleEnabled {
-						slog.Info("Importing: Snapping back to schedule settings", "watts", avgNetMW/1000.0)
+				switch action {
+				case ActionRevertToSchedule:
+					slog.Info("Snapping back to schedule settings", "reason", "evaluateCoolingAction")
+					if !mo {
 						if err := device.SetModeSchedule(nctx); err != nil {
 							slog.Error("unable to revert to schedule", "error", err)
 						}
 					}
+				case ActionFullDeepCool:
+					slog.Info("Heavy export: Engaging Full Deep Cool", "watts", avgNetMW/1000.0)
+					if !mo {
+						if err := device.SetTemps(nctx, daikin.ModeCool, DeepCoolHeatTemp, DeepCoolTemp); err != nil {
+							slog.Error("unable to set deep cool temps", "error", err)
+						}
+					}
+				case ActionModerateNudge:
+					slog.Info("Moderate export: Nudging setpoints down 2.0C", "watts", avgNetMW/1000.0)
+					if !mo {
+						// We maintain the heat/cool spread but drop the floor
+						newHeat := info.HeatSetpoint - DeepCoolModerateTempOffset
+						newCool := info.CoolSetpoint - DeepCoolModerateTempOffset
 
-				default:
-					// STATE: NEUTRAL (Between -200W and +500W)
-					// Do nothing. Stay in whatever mode we are in to prevent rapid toggling.
-					slog.Debug("Neutral power zone: maintaining current state")
+						// Boundary safety check using the device's own reported limits
+						if newCool < info.SetPointMinimum {
+							newCool = info.SetPointMinimum
+						}
+
+						if err := device.SetTemps(nctx, info.Mode, newHeat, newCool); err != nil {
+							slog.Error("unable to apply moderate nudge", "error", err)
+						}
+					}
+				case ActionNone:
+					slog.Debug("Neutral power zone or conditions unmet: maintaining current state")
 				}
 				ncancel()
 			}

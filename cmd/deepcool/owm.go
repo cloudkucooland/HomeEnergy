@@ -38,12 +38,42 @@ func fetchForecast(ctx context.Context) (*Forecast, error) {
 	}
     ff := w.ForecastWeatherJson.(*owm.Forecast5WeatherData)
 
-    // 0 seems to be "today", is 1 "tomorrow"?
-    tomorrow := 1 
+	now := time.Now()
+	// Define "tomorrow" as midnight to midnight tomorrow local time
+	tomorrowStart := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, now.Location())
+	tomorrowEnd := tomorrowStart.Add(24 * time.Hour)
+
+	var high float64 = -100.0
+	var low float64 = 100.0
+	var cloudy bool
+	var found bool
+
+	for _, item := range ff.List {
+		t := time.Unix(int64(item.Dt), 0)
+		if t.Before(tomorrowStart) || !t.Before(tomorrowEnd) {
+			continue
+		}
+
+		found = true
+		if item.Main.TempMax > high {
+			high = item.Main.TempMax
+		}
+		if item.Main.TempMin < low {
+			low = item.Main.TempMin
+		}
+		if item.Clouds.All > DeepCoolCloudyThreshold {
+			cloudy = true
+		}
+	}
+
+	if !found {
+		return nil, fmt.Errorf("no forecast data found for tomorrow")
+	}
+
 	var f = Forecast{
-		High:    ff.List[tomorrow].Main.TempMax,
-		Low:     ff.List[tomorrow].Main.TempMin,
-		Cloudy:  ff.List[tomorrow].Clouds.All > DeepCoolCloudyThreshold,
+		High:    high,
+		Low:     low,
+		Cloudy:  cloudy,
 		ValidAt: time.Now(),
 	}
 	return &f, nil
