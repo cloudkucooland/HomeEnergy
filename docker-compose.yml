@@ -115,7 +115,5 @@ services:
         condition: service_healthy
 
 volumes:
-  influxdb_data:
-      external: true
-      name: emeterlog_influxdb_data
+  influxdb_data: {}
   grafana_data: {}
