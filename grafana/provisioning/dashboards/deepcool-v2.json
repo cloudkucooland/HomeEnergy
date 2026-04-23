@@ -1,0 +1,1065 @@
+{
+  "annotations": [
+    {
+      "kind": "AnnotationQuery",
+      "spec": {
+        "builtIn": true,
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "query": {
+          "datasource": {
+            "name": "-- Grafana --"
+          },
+          "group": "grafana",
+          "kind": "DataQuery",
+          "spec": {},
+          "version": "v0"
+        }
+      }
+    }
+  ],
+  "cursorSync": "Off",
+  "editable": true,
+  "elements": {
+    "panel-2": {
+      "kind": "Panel",
+      "spec": {
+        "data": {
+          "kind": "QueryGroup",
+          "spec": {
+            "queries": [
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "hidden": false,
+                  "query": {
+                    "datasource": {
+                      "name": "InfluxDB_Energy"
+                    },
+                    "group": "influxdb",
+                    "kind": "DataQuery",
+                    "spec": {
+                      "query": "from(bucket: \"daikin\")\n  |> range(start: -24h)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"daikin_stats\")\n  |> filter(fn: (r) => r[\"_field\"] == \"temp_outdoor\" or r[\"_field\"] == \"hum_outdoor\" or r[\"_field\"] == \"hum_indoor\" or r[\"_field\"] == \"temp_indoor\")\n  |> aggregateWindow(every: 5m, fn: mean, column: \"_value\")\n  |> yield(name: \"weather\")"
+                    },
+                    "version": "v0"
+                  },
+                  "refId": "A"
+                }
+              },
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "hidden": false,
+                  "query": {
+                    "datasource": {
+                      "name": "InfluxDB_Energy"
+                    },
+                    "group": "influxdb",
+                    "kind": "DataQuery",
+                    "spec": {
+                      "query": "from(bucket: \"energy\")\n  |> range(start: -24h)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"emeter\")\n  |> filter(fn: (r) => r[\"alias\"] =~ /net-consumption-L[12]/)\n  |> filter(fn: (r) => r[\"_field\"] == \"PowerMW\")\n  |> map(fn: (r) => ({ r with _value: float(v: r._value) }))\n  |> aggregateWindow(every: 5m, fn: mean, column: \"_value\")\n  |> group(columns: [\"_time\"])\n  |> sum()\n  |> group()\n  |> map(fn: (r) => ({ r with _value: r._value / 1000.0 }))\n  |> yield(name: \"power_kw\")"
+                    },
+                    "version": "v0"
+                  },
+                  "refId": "B"
+                }
+              }
+            ],
+            "queryOptions": {},
+            "transformations": []
+          }
+        },
+        "description": "",
+        "id": 2,
+        "links": [],
+        "title": "W vs Temp",
+        "vizConfig": {
+          "group": "timeseries",
+          "kind": "VizConfig",
+          "spec": {
+            "fieldConfig": {
+              "defaults": {
+                "color": {
+                  "mode": "palette-classic"
+                },
+                "custom": {
+                  "axisBorderShow": false,
+                  "axisCenteredZero": false,
+                  "axisColorMode": "text",
+                  "axisLabel": "",
+                  "axisPlacement": "auto",
+                  "barAlignment": 0,
+                  "barWidthFactor": 0.6,
+                  "drawStyle": "line",
+                  "fillOpacity": 0,
+                  "gradientMode": "none",
+                  "hideFrom": {
+                    "legend": false,
+                    "tooltip": false,
+                    "viz": false
+                  },
+                  "insertNulls": false,
+                  "lineInterpolation": "linear",
+                  "lineWidth": 1,
+                  "pointSize": 5,
+                  "scaleDistribution": {
+                    "log": 10,
+                    "type": "log"
+                  },
+                  "showPoints": "auto",
+                  "showValues": false,
+                  "spanNulls": false,
+                  "stacking": {
+                    "group": "A",
+                    "mode": "none"
+                  },
+                  "thresholdsStyle": {
+                    "mode": "off"
+                  }
+                },
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": 0
+                    },
+                    {
+                      "color": "red",
+                      "value": 80
+                    }
+                  ]
+                }
+              },
+              "overrides": [
+                {
+                  "matcher": {
+                    "id": "byName",
+                    "options": "daikin_stats temp_outdoor Cat Retirement Home"
+                  },
+                  "properties": [
+                    {
+                      "id": "displayName",
+                      "value": "Outside Temp"
+                    },
+                    {
+                      "id": "unit",
+                      "value": "none"
+                    },
+                    {
+                      "id": "custom.axisLabel",
+                      "value": "degC"
+                    }
+                  ]
+                },
+                {
+                  "matcher": {
+                    "id": "byName",
+                    "options": "daikin_stats temp_indoor Cat Retirement Home"
+                  },
+                  "properties": [
+                    {
+                      "id": "displayName",
+                      "value": "Indoor Temp"
+                    },
+                    {
+                      "id": "custom.axisLabel",
+                      "value": "degC"
+                    },
+                    {
+                      "id": "unit",
+                      "value": "none"
+                    }
+                  ]
+                },
+                {
+                  "matcher": {
+                    "id": "byName",
+                    "options": "daikin_stats hum_indoor Cat Retirement Home"
+                  },
+                  "properties": [
+                    {
+                      "id": "displayName",
+                      "value": "Indoor Humidity"
+                    },
+                    {
+                      "id": "custom.axisLabel",
+                      "value": "Relative Humidity"
+                    },
+                    {
+                      "id": "custom.scaleDistribution",
+                      "value": {
+                        "type": "linear"
+                      }
+                    },
+                    {
+                      "id": "unit",
+                      "value": "percent"
+                    }
+                  ]
+                },
+                {
+                  "matcher": {
+                    "id": "byName",
+                    "options": "daikin_stats hum_outdoor Cat Retirement Home"
+                  },
+                  "properties": [
+                    {
+                      "id": "displayName",
+                      "value": "Outside Humidity"
+                    },
+                    {
+                      "id": "custom.axisLabel",
+                      "value": "Relative Humidity"
+                    },
+                    {
+                      "id": "custom.scaleDistribution",
+                      "value": {
+                        "type": "linear"
+                      }
+                    },
+                    {
+                      "id": "unit",
+                      "value": "percent"
+                    }
+                  ]
+                },
+                {
+                  "matcher": {
+                    "id": "byFrameRefID",
+                    "options": "B"
+                  },
+                  "properties": [
+                    {
+                      "id": "unit",
+                      "value": "sishort"
+                    },
+                    {
+                      "id": "displayName",
+                      "value": "Net Consumption"
+                    },
+                    {
+                      "id": "custom.axisLabel",
+                      "value": "Watts"
+                    }
+                  ]
+                },
+                {
+                  "matcher": {
+                    "id": "byFrameRefID",
+                    "options": "A"
+                  },
+                  "properties": [
+                    {
+                      "id": "custom.axisPlacement",
+                      "value": "right"
+                    },
+                    {
+                      "id": "custom.scaleDistribution",
+                      "value": {
+                        "type": "linear"
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            "options": {
+              "annotations": {
+                "clustering": -1,
+                "multiLane": false
+              },
+              "legend": {
+                "calcs": [],
+                "displayMode": "list",
+                "placement": "bottom",
+                "showLegend": true
+              },
+              "tooltip": {
+                "hideZeros": false,
+                "mode": "single",
+                "sort": "none"
+              }
+            }
+          },
+          "version": "13.0.1"
+        }
+      }
+    },
+    "panel-3": {
+      "kind": "Panel",
+      "spec": {
+        "data": {
+          "kind": "QueryGroup",
+          "spec": {
+            "queries": [
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "hidden": false,
+                  "query": {
+                    "datasource": {
+                      "name": "InfluxDB_Energy"
+                    },
+                    "group": "influxdb",
+                    "kind": "DataQuery",
+                    "spec": {
+                      "query": "from(bucket: \"energy\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r.alias =~ /total-consumption-L[12]/)\n  // Average the Envoy phases over the window\n  |> aggregateWindow(every: 10m, fn: mean, createEmpty: true)\n  |> fill(value: 0.0)\n  // Sum L1 + L2\n  |> group(columns: [\"_time\"])\n  |> sum()\n  |> group()\n  |> map(fn: (r) => ({ _time: r._time, _value: float(v: r._value) / 1000.0 }))"
+                    },
+                    "version": "v0"
+                  },
+                  "refId": "A"
+                }
+              },
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "hidden": false,
+                  "query": {
+                    "datasource": {
+                      "name": "InfluxDB_Energy"
+                    },
+                    "group": "influxdb",
+                    "kind": "DataQuery",
+                    "spec": {
+                      "query": "from(bucket: \"energy\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"emeter\" and r._field == \"PowerMW\")\n  |> filter(fn: (r) => r.alias !~ /total-consumption|production|net-consumption/)\n  |> aggregateWindow(every: 10m, fn: mean, createEmpty: true)\n  |> fill(value: 0.0)\n  // STEP 2: Sum all the averaged plugs together\n  |> group(columns: [\"_time\"])\n  |> sum()\n  |> group()\n  |> map(fn: (r) => ({ _time: r._time, _value: float(v: r._value) / 1000.0 }))"
+                    },
+                    "version": "v0"
+                  },
+                  "refId": "B"
+                }
+              },
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "hidden": false,
+                  "query": {
+                    "datasource": {
+                      "name": "__expr__"
+                    },
+                    "group": "__expr__",
+                    "kind": "DataQuery",
+                    "spec": {
+                      "expression": "$A - $B",
+                      "type": "math"
+                    },
+                    "version": "v0"
+                  },
+                  "refId": "C"
+                }
+              },
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "hidden": false,
+                  "query": {
+                    "datasource": {
+                      "name": "InfluxDB_Energy"
+                    },
+                    "group": "influxdb",
+                    "kind": "DataQuery",
+                    "spec": {
+                      "query": "from(bucket: \"daikin\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"daikin_stats\")\n  |> filter(fn: (r) => r[\"_field\"] == \"temp_outdoor\")\n  |> aggregateWindow(every: 10m, fn: mean, createEmpty: true)\n  |> group()\n  |> keep(columns: [\"_time\", \"_value\"])"
+                    },
+                    "version": "v0"
+                  },
+                  "refId": "D"
+                }
+              }
+            ],
+            "queryOptions": {},
+            "transformations": [
+              {
+                "group": "renameByRegex",
+                "kind": "Transformation",
+                "spec": {
+                  "filter": {
+                    "id": "byRefId",
+                    "options": "/^(?:A|B|C)$/"
+                  },
+                  "options": {
+                    "regex": ".*alias=\"([^\"]+)\".*device=\".{37}(.{3})\".*",
+                    "renamePattern": "$1 ($2)"
+                  }
+                }
+              },
+              {
+                "group": "renameByRegex",
+                "kind": "Transformation",
+                "spec": {
+                  "filter": {
+                    "id": "byRefId",
+                    "options": "/^(?:A|B|C)$/"
+                  },
+                  "options": {
+                    "regex": ".*alias=\"([^\"]+)\"",
+                    "renamePattern": "$1 ($2)"
+                  }
+                }
+              },
+              {
+                "group": "joinByField",
+                "kind": "Transformation",
+                "spec": {
+                  "options": {}
+                }
+              }
+            ]
+          }
+        },
+        "description": "Somehow it should be possible to find the difference between these two.",
+        "id": 3,
+        "links": [],
+        "title": "Unaccounted Power V Temp",
+        "vizConfig": {
+          "group": "xychart",
+          "kind": "VizConfig",
+          "spec": {
+            "fieldConfig": {
+              "defaults": {
+                "color": {
+                  "mode": "thresholds"
+                },
+                "custom": {
+                  "axisBorderShow": false,
+                  "axisCenteredZero": false,
+                  "axisColorMode": "text",
+                  "axisLabel": "",
+                  "axisPlacement": "auto",
+                  "fillOpacity": 15,
+                  "hideFrom": {
+                    "legend": false,
+                    "tooltip": false,
+                    "viz": false
+                  },
+                  "pointShape": "circle",
+                  "pointSize": {
+                    "fixed": 5
+                  },
+                  "pointStrokeWidth": 2,
+                  "scaleDistribution": {
+                    "type": "linear"
+                  },
+                  "show": "points"
+                },
+                "fieldMinMax": false,
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": 0
+                    },
+                    {
+                      "color": "green",
+                      "value": 18
+                    },
+                    {
+                      "color": "#EAB839",
+                      "value": 24
+                    },
+                    {
+                      "color": "#EF843C",
+                      "value": 28
+                    },
+                    {
+                      "color": "#E24D42",
+                      "value": 30
+                    },
+                    {
+                      "color": "red",
+                      "value": 34
+                    }
+                  ]
+                },
+                "unit": "sishort"
+              },
+              "overrides": [
+                {
+                  "matcher": {
+                    "id": "byName",
+                    "options": "C Value"
+                  },
+                  "properties": [
+                    {
+                      "id": "custom.axisLabel",
+                      "value": "Watts"
+                    }
+                  ]
+                },
+                {
+                  "matcher": {
+                    "id": "byName",
+                    "options": "Value 3"
+                  },
+                  "properties": [
+                    {
+                      "id": "custom.axisLabel",
+                      "value": "degC"
+                    },
+                    {
+                      "id": "unit",
+                      "value": "none"
+                    },
+                    {
+                      "id": "custom.axisSoftMin",
+                      "value": 5
+                    },
+                    {
+                      "id": "custom.axisSoftMax",
+                      "value": 45
+                    }
+                  ]
+                }
+              ]
+            },
+            "options": {
+              "legend": {
+                "calcs": [],
+                "displayMode": "list",
+                "placement": "bottom",
+                "showLegend": true
+              },
+              "mapping": "manual",
+              "series": [
+                {
+                  "color": {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Value 3"
+                    }
+                  },
+                  "frame": {
+                    "matcher": {
+                      "id": "byIndex",
+                      "options": 0
+                    }
+                  },
+                  "x": {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Value 3"
+                    }
+                  },
+                  "y": {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "C Value"
+                    }
+                  }
+                }
+              ],
+              "tooltip": {
+                "hideZeros": false,
+                "mode": "single",
+                "sort": "none"
+              }
+            }
+          },
+          "version": "13.0.1"
+        }
+      }
+    },
+    "panel-4": {
+      "kind": "Panel",
+      "spec": {
+        "data": {
+          "kind": "QueryGroup",
+          "spec": {
+            "queries": [
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "hidden": false,
+                  "query": {
+                    "datasource": {
+                      "name": "InfluxDB_Energy"
+                    },
+                    "group": "influxdb",
+                    "kind": "DataQuery",
+                    "spec": {
+                      "query": "envoy = from(bucket: \"energy\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r.alias =~ /total-consumption-L[12]/)\n  |> aggregateWindow(every: 10m, fn: mean, createEmpty: true)\n  |> fill(value: 0.0)\n  |> group(columns: [\"_time\"])\n  |> sum()\n  |> group()\n  |> set(key: \"_field\", value: \"e\")\n\nplugs = from(bucket: \"energy\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"emeter\" and r._field == \"PowerMW\")\n  |> filter(fn: (r) => r.alias !~ /total-consumption|production|net-consumption/)\n  |> aggregateWindow(every: 10m, fn: mean, createEmpty: true)\n  |> fill(value: 0.0)\n  |> group(columns: [\"_time\"])\n  |> sum()\n  |> group()\n  |> set(key: \"_field\", value: \"p\")\n\nunion(tables: [envoy, plugs])\n  |> pivot(rowKey:[\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> map(fn: (r) => ({ _time: r._time, unaccounted_p: (float(v: r.e) - float(v: r.p)) / 1000.0 }))\n  |> keep(columns: [\"_time\", \"unaccounted_p\"])"
+                    },
+                    "version": "v0"
+                  },
+                  "refId": "A"
+                }
+              },
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "hidden": false,
+                  "query": {
+                    "datasource": {
+                      "name": "InfluxDB_Energy"
+                    },
+                    "group": "influxdb",
+                    "kind": "DataQuery",
+                    "spec": {
+                      "query": "from(bucket: \"daikin\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"daikin_stats\")\n  |> filter(fn: (r) => r[\"_field\"] == \"temp_outdoor\")\n  |> aggregateWindow(every: 10m, fn: mean, createEmpty: true)\n  |> map(fn: (r) => ({ _time: r._time, outdoor_t: r._value }))\n  |> keep(columns: [\"_time\", \"outdoor_t\"])"
+                    },
+                    "version": "v0"
+                  },
+                  "refId": "B"
+                }
+              },
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "hidden": false,
+                  "query": {
+                    "datasource": {
+                      "name": "InfluxDB_Energy"
+                    },
+                    "group": "influxdb",
+                    "kind": "DataQuery",
+                    "spec": {
+                      "query": "from(bucket: \"daikin\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"daikin_stats\")\n  |> filter(fn: (r) => r[\"_field\"] == \"temp_indoor\")\n  |> aggregateWindow(every: 10m, fn: mean, createEmpty: true)\n  |> fill(value: 22.5)\n  |> map(fn: (r) => ({ \n      _time: r._time, \n      soc_val: (22.5 - float(v: r._value)) / (22.5 - 16.5) * 100.0 \n  }))\n  |> keep(columns: [\"_time\", \"soc_val\"])"
+                    },
+                    "version": "v0"
+                  },
+                  "refId": "C"
+                }
+              }
+            ],
+            "queryOptions": {},
+            "transformations": []
+          }
+        },
+        "description": "",
+        "id": 4,
+        "links": [],
+        "title": "Unaccounted Power & Temperature Trends",
+        "vizConfig": {
+          "group": "timeseries",
+          "kind": "VizConfig",
+          "spec": {
+            "fieldConfig": {
+              "defaults": {
+                "color": {
+                  "mode": "palette-classic"
+                },
+                "custom": {
+                  "axisBorderShow": false,
+                  "axisCenteredZero": false,
+                  "axisColorMode": "text",
+                  "axisLabel": "",
+                  "axisPlacement": "auto",
+                  "barAlignment": 0,
+                  "barWidthFactor": 0.6,
+                  "drawStyle": "line",
+                  "fillOpacity": 10,
+                  "gradientMode": "none",
+                  "hideFrom": {
+                    "legend": false,
+                    "tooltip": false,
+                    "viz": false
+                  },
+                  "insertNulls": false,
+                  "lineInterpolation": "linear",
+                  "lineWidth": 2,
+                  "pointSize": 5,
+                  "scaleDistribution": {
+                    "type": "linear"
+                  },
+                  "showPoints": "auto",
+                  "showValues": false,
+                  "spanNulls": false,
+                  "stacking": {
+                    "group": "A",
+                    "mode": "none"
+                  },
+                  "thresholdsStyle": {
+                    "mode": "off"
+                  }
+                },
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": 0
+                    }
+                  ]
+                }
+              },
+              "overrides": [
+                {
+                  "matcher": {
+                    "id": "byName",
+                    "options": "unaccounted_p"
+                  },
+                  "properties": [
+                    {
+                      "id": "displayName",
+                      "value": "Unaccounted Power"
+                    },
+                    {
+                      "id": "unit",
+                      "value": "watt"
+                    },
+                    {
+                      "id": "custom.axisLabel",
+                      "value": "Watts"
+                    }
+                  ]
+                },
+                {
+                  "matcher": {
+                    "id": "byName",
+                    "options": "outdoor_t"
+                  },
+                  "properties": [
+                    {
+                      "id": "displayName",
+                      "value": "Outdoor Temp"
+                    },
+                    {
+                      "id": "unit",
+                      "value": "celsius"
+                    },
+                    {
+                      "id": "custom.axisPlacement",
+                      "value": "right"
+                    },
+                    {
+                      "id": "custom.axisLabel",
+                      "value": "°C"
+                    }
+                  ]
+                },
+                {
+                  "matcher": {
+                    "id": "byName",
+                    "options": "soc_val"
+                  },
+                  "properties": [
+                    {
+                      "id": "displayName",
+                      "value": "State of Charge"
+                    },
+                    {
+                      "id": "unit",
+                      "value": "percent"
+                    },
+                    {
+                      "id": "custom.axisPlacement",
+                      "value": "hidden"
+                    }
+                  ]
+                }
+              ]
+            },
+            "options": {
+              "annotations": {
+                "clustering": -1,
+                "multiLane": false
+              },
+              "legend": {
+                "calcs": [
+                  "mean",
+                  "last"
+                ],
+                "displayMode": "table",
+                "placement": "bottom",
+                "showLegend": true
+              },
+              "tooltip": {
+                "hideZeros": false,
+                "mode": "multi",
+                "sort": "none"
+              }
+            }
+          },
+          "version": "13.0.1"
+        }
+      }
+    },
+    "panel-5": {
+      "kind": "Panel",
+      "spec": {
+        "data": {
+          "kind": "QueryGroup",
+          "spec": {
+            "queries": [
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "hidden": false,
+                  "query": {
+                    "datasource": {
+                      "name": "InfluxDB_Energy"
+                    },
+                    "group": "influxdb",
+                    "kind": "DataQuery",
+                    "spec": {
+                      "query": "from(bucket: \"energy\")\n  |> range(start: -12h) \n  |> filter(fn: (r) => r[\"_measurement\"] == \"emeter\")\n  // Regex to catch both phases\n  |> filter(fn: (r) => r[\"alias\"] =~ /net-consumption-L[12]/)\n  |> filter(fn: (r) => r[\"_field\"] == \"PowerMW\")\n  // 1. Cast to float immediately\n  |> map(fn: (r) => ({ r with _value: float(v: r._value) }))\n  // 2. Pivot/Group so L1 and L2 are in the same table\n  |> group(columns: [\"_time\"])\n  // 3. Sum the values across the phases for each timestamp\n  |> sum()\n  // 4. Group back to a single series for the graph\n  |> group()\n  // 5. Convert to kW and Yield\n  |> map(fn: (r) => ({ r with _value: r._value / 1000.0 }))\n  |> yield(name: \"house_power_kw\")"
+                    },
+                    "version": "v0"
+                  },
+                  "refId": "A"
+                }
+              },
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "hidden": false,
+                  "query": {
+                    "datasource": {
+                      "name": "InfluxDB_Energy"
+                    },
+                    "group": "influxdb",
+                    "kind": "DataQuery",
+                    "spec": {
+                      "query": "from(bucket: \"daikin\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"daikin_stats\")\n  |> filter(fn: (r) => r[\"_field\"] == \"schedule_enabled\")\n  |> aggregateWindow(every: 10m, fn: last, createEmpty: true)\n  |> fill(column: \"_value\", value: false)\n  |> map(fn: (r) => ({\n      r with _value: if r._value == true then 1.0 else 2.0\n    }))\n  |> yield(name: \"fixed_ledge\")"
+                    },
+                    "version": "v0"
+                  },
+                  "refId": "B"
+                }
+              }
+            ],
+            "queryOptions": {},
+            "transformations": []
+          }
+        },
+        "description": "",
+        "id": 5,
+        "links": [],
+        "title": "DeepCool Running",
+        "vizConfig": {
+          "group": "timeseries",
+          "kind": "VizConfig",
+          "spec": {
+            "fieldConfig": {
+              "defaults": {
+                "color": {
+                  "mode": "palette-classic"
+                },
+                "custom": {
+                  "axisBorderShow": false,
+                  "axisCenteredZero": false,
+                  "axisColorMode": "text",
+                  "axisLabel": "",
+                  "axisPlacement": "auto",
+                  "barAlignment": 0,
+                  "barWidthFactor": 0.6,
+                  "drawStyle": "line",
+                  "fillOpacity": 0,
+                  "gradientMode": "none",
+                  "hideFrom": {
+                    "legend": false,
+                    "tooltip": false,
+                    "viz": false
+                  },
+                  "insertNulls": false,
+                  "lineInterpolation": "linear",
+                  "lineWidth": 1,
+                  "pointSize": 5,
+                  "scaleDistribution": {
+                    "log": 10,
+                    "type": "log"
+                  },
+                  "showPoints": "auto",
+                  "showValues": false,
+                  "spanNulls": false,
+                  "stacking": {
+                    "group": "A",
+                    "mode": "none"
+                  },
+                  "thresholdsStyle": {
+                    "mode": "off"
+                  }
+                },
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": 0
+                    },
+                    {
+                      "color": "red",
+                      "value": 80
+                    }
+                  ]
+                }
+              },
+              "overrides": [
+                {
+                  "matcher": {
+                    "id": "byFrameRefID",
+                    "options": "B"
+                  },
+                  "properties": [
+                    {
+                      "id": "custom.axisLabel",
+                      "value": "Running"
+                    },
+                    {
+                      "id": "custom.axisSoftMax",
+                      "value": 2
+                    },
+                    {
+                      "id": "custom.axisSoftMin",
+                      "value": 1
+                    },
+                    {
+                      "id": "custom.lineInterpolation",
+                      "value": "stepAfter"
+                    },
+                    {
+                      "id": "custom.scaleDistribution",
+                      "value": {
+                        "type": "linear"
+                      }
+                    },
+                    {
+                      "id": "custom.gradientMode",
+                      "value": "opacity"
+                    },
+                    {
+                      "id": "custom.fillOpacity",
+                      "value": 40
+                    }
+                  ]
+                },
+                {
+                  "matcher": {
+                    "id": "byFrameRefID",
+                    "options": "A"
+                  },
+                  "properties": [
+                    {
+                      "id": "custom.fillOpacity",
+                      "value": 33
+                    },
+                    {
+                      "id": "custom.gradientMode",
+                      "value": "opacity"
+                    },
+                    {
+                      "id": "custom.axisLabel",
+                      "value": "Watts"
+                    },
+                    {
+                      "id": "unit",
+                      "value": "sishort"
+                    }
+                  ]
+                }
+              ]
+            },
+            "options": {
+              "annotations": {
+                "clustering": -1,
+                "multiLane": false
+              },
+              "legend": {
+                "calcs": [],
+                "displayMode": "list",
+                "placement": "bottom",
+                "showLegend": true
+              },
+              "tooltip": {
+                "hideZeros": false,
+                "mode": "single",
+                "sort": "none"
+              }
+            }
+          },
+          "version": "13.0.1"
+        }
+      }
+    }
+  },
+  "layout": {
+    "kind": "GridLayout",
+    "spec": {
+      "items": [
+        {
+          "kind": "GridLayoutItem",
+          "spec": {
+            "element": {
+              "kind": "ElementReference",
+              "name": "panel-2"
+            },
+            "height": 11,
+            "width": 24,
+            "x": 0,
+            "y": 0
+          }
+        },
+        {
+          "kind": "GridLayoutItem",
+          "spec": {
+            "element": {
+              "kind": "ElementReference",
+              "name": "panel-4"
+            },
+            "height": 11,
+            "width": 12,
+            "x": 0,
+            "y": 11
+          }
+        },
+        {
+          "kind": "GridLayoutItem",
+          "spec": {
+            "element": {
+              "kind": "ElementReference",
+              "name": "panel-5"
+            },
+            "height": 11,
+            "width": 12,
+            "x": 12,
+            "y": 11
+          }
+        },
+        {
+          "kind": "GridLayoutItem",
+          "spec": {
+            "element": {
+              "kind": "ElementReference",
+              "name": "panel-3"
+            },
+            "height": 7,
+            "width": 12,
+            "x": 0,
+            "y": 22
+          }
+        }
+      ]
+    }
+  },
+  "links": [],
+  "liveNow": false,
+  "preload": false,
+  "tags": [
+    "modeling"
+  ],
+  "timeSettings": {
+    "autoRefresh": "",
+    "autoRefreshIntervals": [
+      "5s",
+      "10s",
+      "30s",
+      "1m",
+      "5m",
+      "15m",
+      "30m",
+      "1h",
+      "2h",
+      "1d"
+    ],
+    "fiscalYearStartMonth": 0,
+    "from": "now-12h",
+    "hideTimepicker": false,
+    "timezone": "browser",
+    "to": "now"
+  },
+  "title": "DeepCool modeling",
+  "variables": []
+}

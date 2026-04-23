@@ -6,7 +6,7 @@ providers:
     folder: 'Power Systems'
     type: file
     disableDeletion: false
-    editable: true
+    editable: false
     options:
       path: /etc/grafana/provisioning/dashboards/emlog.json
   - name: 'DeepCool'
@@ -14,6 +14,6 @@ providers:
     folder: 'Power Systems'
     type: file
     disableDeletion: false
-    editable: true
+    editable: false
     options:
       path: /etc/grafana/provisioning/dashboards/deepcool.json
