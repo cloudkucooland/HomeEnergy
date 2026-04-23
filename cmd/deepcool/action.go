@@ -18,23 +18,26 @@ func evaluateCoolingAction(avgNetMW float64, info *daikin.Info, forecast *Foreca
 		return ActionNone
 	}
 
+	// Use setpoint as a proxy for manual override if schedule reports enabled but we are at the floor.
+	isManual := !info.ScheduleEnabled || info.CoolSetpoint == DeepCoolTemp
+
 	// Safety: If indoor temp is already at or below floor, revert to schedule.
 	if info.IndoorTemp <= DeepCoolTemp {
-		if !info.ScheduleEnabled {
+		if isManual {
 			return ActionRevertToSchedule
 		}
 		return ActionNone
 	}
 
 	if info.OutdoorTemp < DeepCoolMinOutdoorTemp {
-		if !info.ScheduleEnabled {
+		if isManual {
 			return ActionRevertToSchedule
 		}
 		return ActionNone
 	}
 
 	if forecast != nil && forecast.Low < DeepCoolOverrideNightLowTemp {
-		if !info.ScheduleEnabled {
+		if isManual {
 			return ActionRevertToSchedule
 		}
 		return ActionNone
@@ -42,17 +45,17 @@ func evaluateCoolingAction(avgNetMW float64, info *daikin.Info, forecast *Foreca
 
 	switch {
 	case avgNetMW < DeepCoolMinExportWatts:
-		if info.ScheduleEnabled || info.CoolSetpoint != DeepCoolTemp {
+		if !isManual || info.CoolSetpoint != DeepCoolTemp {
 			return ActionFullDeepCool
 		}
 	case avgNetMW < DeepCoolModerateExportWatts:
 		// If we are on schedule, we want to nudge.
 		// If we are already manual (e.g., Full Deep Cool), we want to "relax" to a nudge to avoid over-cooling.
-		if info.ScheduleEnabled || info.CoolSetpoint == DeepCoolTemp {
+		if !isManual || info.CoolSetpoint == DeepCoolTemp {
 			return ActionModerateNudge
 		}
 	case avgNetMW > DeepCoolMaxImportWatts:
-		if !info.ScheduleEnabled {
+		if isManual {
 			return ActionRevertToSchedule
 		}
 	}

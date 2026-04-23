@@ -135,7 +135,7 @@ func run(ctx context.Context, cmd *cli.Command) error {
 					slog.Error("unable to log to influx", "error", err)
 				}
 
-				slog.Info("tick", "device", device.Name, "net_watts", fmt.Sprintf("%.2f", avgNetMW/1000.0), "mode", info.Mode, "indoor", info.IndoorTemp, "outdoor", info.OutdoorTemp, "schedule", info.ScheduleEnabled)
+				slog.Info("tick", "device", device.Name, "net_watts", fmt.Sprintf("%.2f", avgNetMW/1000.0), "mode", info.Mode, "indoor", info.IndoorTemp, "outdoor", info.OutdoorTemp, "schedule", info.ScheduleEnabled, "cool", info.CoolSetpoint, "heat", info.HeatSetpoint)
 
 				if forecast != nil {
 					slog.Info("Tomorrow forecast", "high", forecast.High, "low", forecast.Low, "cloudy", forecast.Cloudy)
