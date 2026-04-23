@@ -17,20 +17,17 @@ import (
 	"github.com/cloudkucooland/go-daikin"
 )
 
-// remember, we are stuck with PowerMW as miliwatts, not megawatts, all "watts" values are in mW.
+// remember, we are stuck with PowerMW as miliwatts, not megawatts, all values are in milliwatts.
 // this is due to the field name in the go-envoy library
 
 const (
-	DeepCoolTemp                 = 19.0               // need to be C even if the thermostat is set to display in F
-	DeepCoolHeatTemp             = DeepCoolTemp - 5.0 // Heat should be below cool in cooling mode
-	DeepCoolMaxImportWatts       = 500000             // if in deepcool mode, how much can we "overdraw" before switching to schedule?
-	DeepCoolMinExportWatts       = -1100000           // if in schedule, how much do we need to be exporting before we start deepcool (negative for export)
-	DeepCoolModerateExportWatts  = -200000            // for "not-so-deep" cooling
-	DeepCoolModerateTempOffset   = 2.0                // how much to bump down in moderate mode
-	DeepCoolMinOutdoorTemp       = 22.0               // Don't deepcool if it's not hot
-	DeepCoolOverrideNightLowTemp = 18.0               // Don't deepcool if tonight will be cool anyway
-	DeepCoolCloudyThreshold      = 84                 // 0-100, 84 is "broken clouds"
-	DeepCoolMaxDelta             = 3.0                // Max degrees to cool below indoor temp to prevent inverter ramp-up
+	DeepCoolColdestTemp            = 19.0     // need to be C even if the thermostat is set to display in F
+	DeepCoolMaxImportMilliWatts    = 500000   // if in deepcool mode, how much can we "overdraw" before switching to schedule?
+	DeepCoolExportingMilliWatts    = -2500000 // if in schedule, how much do we need to be exporting before we start deepcool (negative for export)
+	DeepCoolMinOutdoorTemp         = 22.0     // Don't deepcool if it's not hot
+	DeepCoolOverrideNightLowTemp   = 18.0     // Don't deepcool if tonight will be cool anyway
+	DeepCoolCloudyThreshold        = 84       // 0-100, 84 is "broken clouds"
+	DeepCoolMaxDelta               = 3.0      // Max degrees to cool below indoor temp to prevent inverter ramp-up
 )
 
 func main() {
@@ -40,7 +37,7 @@ func main() {
 		Flags: []cli.Flag{
 			&cli.BoolFlag{Name: "monitor-only", Value: false, Usage: "monitor without engaging deep cooling"},
 			&cli.StringFlag{Name: "energy-bucket", Value: "energy", Sources: cli.EnvVars("INFLUX_BUCKET"), Usage: "influxdb bucket for energy data (ro)"},
-			&cli.StringFlag{Name: "daikin-bucket", Value: "daikin", Sources: cli.EnvVars("DAIKIN_BUCKET", "INFLUX_BUCKET"), Usage: "influxdb bucket for daikin data (rw)"},
+			&cli.StringFlag{Name: "daikin-bucket", Value: "daikin", Sources: cli.EnvVars("DAIKIN_BUCKET"), Usage: "influxdb bucket for daikin data (rw)"},
 			&cli.StringFlag{Name: "weather-bucket", Value: "weather", Sources: cli.EnvVars("WEATHER_BUCKET"), Usage: "influxdb bucket for weather data (rw)"},
 		},
 		Action: run,
@@ -77,7 +74,7 @@ func run(ctx context.Context, cmd *cli.Command) error {
 	queryAPI := influx.QueryAPI(os.Getenv("INFLUX_ORG"))
 	defer influx.Close()
 
-	ticker := time.NewTicker(10 * time.Minute)
+	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
 
 	i := 0
@@ -137,9 +134,9 @@ func run(ctx context.Context, cmd *cli.Command) error {
 
 				slog.Info("tick", "device", device.Name, "net_watts", fmt.Sprintf("%.2f", avgNetMW/1000.0), "mode", info.Mode, "indoor", info.IndoorTemp, "outdoor", info.OutdoorTemp, "schedule", info.ScheduleEnabled, "cool", info.CoolSetpoint, "heat", info.HeatSetpoint)
 
-				if forecast != nil {
+				/* if forecast != nil {
 					slog.Info("Tomorrow forecast", "high", forecast.High, "low", forecast.Low, "cloudy", forecast.Cloudy)
-				}
+				} */
 
 				mo := cmd.Bool("monitor-only")
 				action := evaluateCoolingAction(avgNetMW, info, forecast)
@@ -169,24 +166,24 @@ func run(ctx context.Context, cmd *cli.Command) error {
 							}
 						}
 					}
-				case ActionFullDeepCool, ActionModerateNudge:
+				case ActionUseTheSolar:
+					heat, cool := calculateDynamicSetpoint(info, avgNetMW)
+
+					slog.Info("Dynamic cooling adjustment",
+						"action", action,
+						"net_watts", fmt.Sprintf("%.2f", avgNetMW/1000.0),
+						"old_cool", info.CoolSetpoint,
+						"new_cool", cool,
+						"indoor", info.IndoorTemp,
+						"outdoor", info.OutdoorTemp)
+
 					if !mo {
-						heat, cool := calculateDynamicSetpoint(info, avgNetMW)
-
-						slog.Info("Dynamic cooling adjustment",
-							"action", action,
-							"net_watts", fmt.Sprintf("%.2f", avgNetMW/1000.0),
-							"old_cool", info.CoolSetpoint,
-							"new_cool", cool,
-							"indoor", info.IndoorTemp,
-							"outdoor", info.OutdoorTemp)
-
 						if err := device.SetTemps(nctx, daikin.ModeCool, heat, cool); err != nil {
 							slog.Error("unable to apply dynamic setpoint", "error", err)
 						}
 					}
 				case ActionNone:
-					slog.Debug("Neutral power zone or conditions unmet: maintaining current state")
+					slog.Info("Neutral power zone or conditions unmet: maintaining current state")
 				}
 				ncancel()
 			}
@@ -210,8 +207,8 @@ func calculateDynamicSetpoint(info *daikin.Info, avgNetMW float64) (float64, flo
 
 	// SAFETY CONSTRAINTS
 	// 1. Absolute floor
-	if targetCool < DeepCoolTemp {
-		targetCool = DeepCoolTemp
+	if targetCool < DeepCoolColdestTemp {
+		targetCool = DeepCoolColdestTemp
 	}
 
 	// 2. Inverter Ramp Protection: Keep target within DeepCoolMaxDelta of indoor temp.
@@ -220,9 +217,9 @@ func calculateDynamicSetpoint(info *daikin.Info, avgNetMW float64) (float64, flo
 		targetCool = info.IndoorTemp - DeepCoolMaxDelta
 	}
 
-	// 3. Round to nearest 0.5C for thermostat compatibility
-	targetCool = math.Round(targetCool*2) / 2
-	targetHeat := targetCool - 5.0
+	// 3. Round to nearest 0.1C for thermostat compatibility -- display is at 0.5 percision but logic is 0.1
+	targetCool = math.Round(targetCool*10) / 10
+	targetHeat := targetCool - info.SetPointDelta
 
 	return targetHeat, targetCool
 }

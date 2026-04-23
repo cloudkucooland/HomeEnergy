@@ -8,49 +8,40 @@ type CoolingAction int
 
 const (
 	ActionNone CoolingAction = iota
-	ActionFullDeepCool
-	ActionModerateNudge
+	ActionUseTheSolar
 	ActionRevertToSchedule
 )
 
 func evaluateCoolingAction(avgNetMW float64, info *daikin.Info, forecast *Forecast) CoolingAction {
-	if info.Mode != daikin.ModeCool {
-		return ActionNone
-	}
-
-	// Use setpoint as a proxy for manual override if schedule reports enabled but we are at the floor.
-	isManual := !info.ScheduleEnabled || info.CoolSetpoint == DeepCoolTemp
-
-	if info.OutdoorTemp < DeepCoolMinOutdoorTemp {
-		if isManual {
-			return ActionRevertToSchedule
-		}
-		return ActionNone
-	}
-
-	if forecast != nil && forecast.Low < DeepCoolOverrideNightLowTemp {
-		if isManual {
-			return ActionRevertToSchedule
-		}
-		return ActionNone
-	}
+	isManual := !info.ScheduleEnabled
 
 	switch {
-	case avgNetMW < DeepCoolMinExportWatts:
-		if !isManual || info.CoolSetpoint != DeepCoolTemp {
-			return ActionFullDeepCool
-		}
-	case avgNetMW < DeepCoolModerateExportWatts:
-		// If we are on schedule, we want to nudge.
-		// If we are already manual (e.g., Full Deep Cool), we want to "relax" to a nudge to avoid over-cooling.
-		if !isManual || info.CoolSetpoint == DeepCoolTemp {
-			return ActionModerateNudge
-		}
-	case avgNetMW > DeepCoolMaxImportWatts:
+	case info.Mode != daikin.ModeCool:
+		// not cooling, ensure we are on the schedule
 		if isManual {
 			return ActionRevertToSchedule
 		}
+	case info.OutdoorTemp < DeepCoolMinOutdoorTemp:
+		// too cold outside, don't spend solar
+		if isManual {
+			return ActionRevertToSchedule
+		}
+	case forecast != nil && forecast.Low < DeepCoolOverrideNightLowTemp:
+		// forcast says tonight will be cool, no need to spend the solar, get a few pennies from the power company
+		if isManual {
+			return ActionRevertToSchedule
+		}
+	case avgNetMW > DeepCoolMaxImportMilliWatts:
+		// we are importing, quit wasting money
+		if isManual {
+			return ActionRevertToSchedule
+		}
+	case avgNetMW < DeepCoolExportingMilliWatts:
+		// we are exporting, use the solar
+		// do not check isManual since the target temp needs to be calculated
+		return ActionUseTheSolar
 	}
 
+	// we don't need to change states
 	return ActionNone
 }
