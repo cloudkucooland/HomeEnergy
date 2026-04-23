@@ -23,7 +23,7 @@ import (
 const (
 	DeepCoolColdestTemp            = 19.0     // need to be C even if the thermostat is set to display in F
 	DeepCoolMaxImportMilliWatts    = 500000   // if in deepcool mode, how much can we "overdraw" before switching to schedule?
-	DeepCoolExportingMilliWatts    = -2500000 // if in schedule, how much do we need to be exporting before we start deepcool (negative for export)
+	DeepCoolExportingMilliWatts    = -500000  // if in schedule, how much do we need to be exporting before we start deepcool (negative for export)
 	DeepCoolMinOutdoorTemp         = 22.0     // Don't deepcool if it's not hot
 	DeepCoolOverrideNightLowTemp   = 18.0     // Don't deepcool if tonight will be cool anyway
 	DeepCoolCloudyThreshold        = 84       // 0-100, 84 is "broken clouds"
@@ -178,8 +178,13 @@ func run(ctx context.Context, cmd *cli.Command) error {
 						"outdoor", info.OutdoorTemp)
 
 					if !mo {
-						if err := device.SetTemps(nctx, daikin.ModeCool, heat, cool); err != nil {
-							slog.Error("unable to apply dynamic setpoint", "error", err)
+						// Deadband: Only update if the change is at least 0.5C
+						if math.Abs(cool-info.CoolSetpoint) >= 0.5 {
+							if err := device.SetTemps(nctx, daikin.ModeCool, heat, cool); err != nil {
+								slog.Error("unable to apply dynamic setpoint", "error", err)
+							}
+						} else {
+							slog.Debug("Nudge below deadband, skipping API call", "delta", math.Abs(cool-info.CoolSetpoint))
 						}
 					}
 				case ActionNone:
@@ -246,7 +251,7 @@ func logStats(ctx context.Context, w api.WriteAPIBlocking, name string, info *da
 func getAveragePower(ctx context.Context, cmd *cli.Command, queryAPI api.QueryAPI) (float64, error) {
 	query := fmt.Sprintf(`
 		from(bucket: "%s")
-		|> range(start: -15m)
+		|> range(start: -5m)
 		|> filter(fn: (r) => r["_measurement"] == "emeter")
 		|> filter(fn: (r) => r["alias"] =~ /net-consumption-L[12]/)
 		|> filter(fn: (r) => r["_field"] == "PowerMW")

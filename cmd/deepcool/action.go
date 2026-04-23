@@ -36,9 +36,8 @@ func evaluateCoolingAction(avgNetMW float64, info *daikin.Info, forecast *Foreca
 		if isManual {
 			return ActionRevertToSchedule
 		}
-	case avgNetMW < DeepCoolExportingMilliWatts:
-		// we are exporting, use the solar
-		// do not check isManual since the target temp needs to be calculated
+	case avgNetMW < DeepCoolExportingMilliWatts || isManual:
+		// we are exporting, OR we are already manual and need to calculate the equilibrium
 		return ActionUseTheSolar
 	}
 
