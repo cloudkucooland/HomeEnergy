@@ -12,11 +12,10 @@ const (
 	ActionRevertToSchedule
 )
 
-func evaluateCoolingAction(avgNetMW float64, info *daikin.Info, forecast *Forecast) CoolingAction {
-	// info.SchedOverride != 0 means a manual hold or temporary override is active.
-	// We also treat being at the floor (DeepCoolColdestTemp) as manual to ensure
-	// snap-back works even if the thermostat erroneously reports schedule=true.
-	isManual := info.SchedOverride != 0 || info.CoolSetpoint == DeepCoolColdestTemp
+func evaluateCoolingAction(avgNetMW float64, info *daikin.Info, forecast *Forecast, isActiveControl bool) CoolingAction {
+	// If the utility has taken control, we treat it as manual.
+	// We also respect the API's override flag if it ever starts working.
+	isManual := isActiveControl || info.SchedOverride != 0
 
 	switch {
 	case info.Mode != daikin.ModeCool:
@@ -30,7 +29,7 @@ func evaluateCoolingAction(avgNetMW float64, info *daikin.Info, forecast *Foreca
 			return ActionRevertToSchedule
 		}
 	case forecast != nil && forecast.Low < DeepCoolOverrideNightLowTemp:
-		// forecast says tonight will be cool, no need to spend the solar
+		// forecast says tonight will be cool, no need to spend the solar, get a few pennies from the power company
 		if isManual {
 			return ActionRevertToSchedule
 		}

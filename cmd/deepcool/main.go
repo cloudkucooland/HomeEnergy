@@ -80,6 +80,10 @@ func run(ctx context.Context, cmd *cli.Command) error {
 	i := 0
 	forecast, _ := fetchForecast(ctx)
 
+	lastScheduleHeat := make(map[string]float64)
+	lastScheduleCool := make(map[string]float64)
+	isActiveControl := make(map[string]bool)
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -103,7 +107,6 @@ func run(ctx context.Context, cmd *cli.Command) error {
 				avgNetMW, err := getAveragePower(nctx, cmd, queryAPI)
 				if err != nil {
 					slog.Error("error getting average power", "err", err)
-					// failsafe: don't clear override here as we might just have a network glitch
 					ncancel()
 					continue
 				}
@@ -115,6 +118,13 @@ func run(ctx context.Context, cmd *cli.Command) error {
 					continue
 				}
 
+				// Baseline Protection: Only update the schedule baseline if the UTILITY
+				// has not currently taken control of the setpoints.
+				if info.ScheduleEnabled && !isActiveControl[device.Name] {
+					lastScheduleHeat[device.Name] = info.HeatSetpoint
+					lastScheduleCool[device.Name] = info.CoolSetpoint
+				}
+
 				if err := logStats(nctx, writeAPI, device.Name, info); err != nil {
 					slog.Error("unable to log to influx", "error", err)
 				}
@@ -122,15 +132,34 @@ func run(ctx context.Context, cmd *cli.Command) error {
 				slog.Info("tick", "device", device.Name, "net_watts", fmt.Sprintf("%.2f", avgNetMW/1000.0), "mode", info.Mode, "indoor", info.IndoorTemp, "outdoor", info.OutdoorTemp, "schedule", info.ScheduleEnabled, "override", info.SchedOverride, "cool", info.CoolSetpoint, "heat", info.HeatSetpoint)
 
 				mo := cmd.Bool("monitor-only")
-				action := evaluateCoolingAction(avgNetMW, info, forecast)
+				action := evaluateCoolingAction(avgNetMW, info, forecast, isActiveControl[device.Name])
 
 				switch action {
 				case ActionRevertToSchedule:
 					slog.Info("Snapping back to schedule settings", "reason", "evaluateCoolingAction", "indoor", info.IndoorTemp, "net_watts", avgNetMW/1000.0)
 					if !mo {
+						// Fallback: If ClearScheduleOverride is ignored, explicitly set the temps
+						baseCool := 24.0 // Conservative default
+						baseHeat := 19.0
+						if val, ok := lastScheduleCool[device.Name]; ok && val > 0 {
+							baseCool = val
+						}
+						if val, ok := lastScheduleHeat[device.Name]; ok && val > 0 {
+							baseHeat = val
+						}
+
 						if err := device.ClearScheduleOverride(nctx); err != nil {
 							slog.Error("unable to clear schedule override", "error", err)
 						}
+
+						// Explicitly push the thermostat away from the deep-cool floor
+						slog.Info("Restoring schedule setpoints", "cool", baseCool, "heat", baseHeat)
+						if err := device.SetTemps(nctx, daikin.ModeCool, baseHeat, baseCool); err != nil {
+							slog.Error("unable to restore schedule temps", "error", err)
+						}
+
+						// We have relinquished control
+						isActiveControl[device.Name] = false
 					}
 				case ActionUseTheSolar:
 					heat, cool := calculateDynamicSetpoint(info, avgNetMW)
@@ -148,9 +177,13 @@ func run(ctx context.Context, cmd *cli.Command) error {
 						if math.Abs(cool-info.CoolSetpoint) >= 0.5 {
 							if err := device.SetTemps(nctx, daikin.ModeCool, heat, cool); err != nil {
 								slog.Error("unable to apply dynamic setpoint", "error", err)
+							} else {
+								// Success! We are now in control.
+								isActiveControl[device.Name] = true
 							}
 						} else {
 							slog.Debug("Nudge below deadband, skipping API call", "delta", math.Abs(cool-info.CoolSetpoint))
+							// If we were already in control, stay in control
 						}
 					}
 				case ActionNone:
