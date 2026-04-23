@@ -18,6 +18,14 @@ func evaluateCoolingAction(avgNetMW float64, info *daikin.Info, forecast *Foreca
 		return ActionNone
 	}
 
+	// Safety: If indoor temp is already at or below floor, revert to schedule.
+	if info.IndoorTemp <= DeepCoolTemp {
+		if !info.ScheduleEnabled {
+			return ActionRevertToSchedule
+		}
+		return ActionNone
+	}
+
 	if info.OutdoorTemp < DeepCoolMinOutdoorTemp {
 		if !info.ScheduleEnabled {
 			return ActionRevertToSchedule

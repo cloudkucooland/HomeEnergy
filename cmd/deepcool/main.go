@@ -135,7 +135,7 @@ func run(ctx context.Context, cmd *cli.Command) error {
 					slog.Error("unable to log to influx", "error", err)
 				}
 
-				slog.Info("tick", "device", device.Name, "net_watts", fmt.Sprintf("%.2f", avgNetMW/1000.0), "mode", info.Mode, "indoor temp", info.IndoorTemp, "outdoor temp", info.OutdoorTemp)
+				slog.Info("tick", "device", device.Name, "net_watts", fmt.Sprintf("%.2f", avgNetMW/1000.0), "mode", info.Mode, "indoor", info.IndoorTemp, "outdoor", info.OutdoorTemp, "schedule", info.ScheduleEnabled)
 
 				if forecast != nil {
 					slog.Info("Tomorrow forecast", "high", forecast.High, "low", forecast.Low, "cloudy", forecast.Cloudy)
@@ -146,7 +146,7 @@ func run(ctx context.Context, cmd *cli.Command) error {
 
 				switch action {
 				case ActionRevertToSchedule:
-					slog.Info("Snapping back to schedule settings", "reason", "evaluateCoolingAction")
+					slog.Info("Snapping back to schedule settings", "reason", "evaluateCoolingAction", "indoor", info.IndoorTemp, "net_watts", avgNetMW/1000.0)
 					if !mo {
 						if err := device.SetModeSchedule(nctx); err != nil {
 							slog.Error("unable to revert to schedule", "error", err)
