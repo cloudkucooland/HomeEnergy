@@ -29,6 +29,12 @@ func evaluateCoolingAction(avgNetMW float64, info *daikin.Info, forecast *Foreca
 		return ActionNone
 	}
 
+	// Hysteresis: If we are on schedule, don't start deep cooling until the house
+	// has warmed up at least 1 degree above the floor.
+	if info.ScheduleEnabled && info.IndoorTemp < DeepCoolTemp+1.0 {
+		return ActionNone
+	}
+
 	if info.OutdoorTemp < DeepCoolMinOutdoorTemp {
 		if isManual {
 			return ActionRevertToSchedule

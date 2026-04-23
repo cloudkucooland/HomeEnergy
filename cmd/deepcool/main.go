@@ -148,8 +148,25 @@ func run(ctx context.Context, cmd *cli.Command) error {
 				case ActionRevertToSchedule:
 					slog.Info("Snapping back to schedule settings", "reason", "evaluateCoolingAction", "indoor", info.IndoorTemp, "net_watts", avgNetMW/1000.0)
 					if !mo {
+						// Fallback: Explicitly set the temps back to schedule baselines
+						baseCool := 0.0
+						baseHeat := 0.0
+						if val, ok := lastScheduleCool[device.Name]; ok && val > 0 {
+							baseCool = val
+						}
+						if val, ok := lastScheduleHeat[device.Name]; ok && val > 0 {
+							baseHeat = val
+						}
+
 						if err := device.SetModeSchedule(nctx); err != nil {
 							slog.Error("unable to revert to schedule", "error", err)
+						}
+
+						if baseCool > 0 {
+							slog.Info("Restoring schedule setpoints", "cool", baseCool, "heat", baseHeat)
+							if err := device.SetTemps(nctx, daikin.ModeCool, baseHeat, baseCool); err != nil {
+								slog.Error("unable to restore schedule temps", "error", err)
+							}
 						}
 					}
 				case ActionFullDeepCool, ActionModerateNudge:
