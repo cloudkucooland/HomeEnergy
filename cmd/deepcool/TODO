@@ -1,2 +1,1 @@
-Demand Response as a "Solar Cloud" Filter: If your 15-minute average solar export starts to drop, instead of immediately reverting to the Schedule, you could trigger a SetDemandResponse(true, 2.0). This tells the AC: "Stay on, but relax the target by 2 degrees to save power until the clouds pass."
-
+Ignore all Demand Response logic since it does not work.

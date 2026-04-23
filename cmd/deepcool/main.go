@@ -20,15 +20,15 @@ import (
 // this is due to the field name in the go-envoy library
 
 const (
-	DeepCoolTemp                 = 19               // need to be C even if the thermostat is set to display in F
-	DeepCoolHeatTemp             = DeepCoolTemp - 5 // Just needs to be more than DeepCoolTemp
-	DeepCoolMaxImportWatts       = 500000           // if in deepcool mode, how much can we "overdraw" before switching to schedule?
-	DeepCoolMinExportWatts       = -1100000         // if in schedule, how much do we need to be exporting before we start deepcool (negative for export)
-	DeepCoolModerateExportWatts  = -200000          // for "not-so-deep" cooling
-	DeepCoolModerateTempOffset   = 2.0              // how much to bump down in moderate mode
-	DeepCoolMinOutdoorTemp       = 22.0             // Don't deepcool if it's not hot
-	DeepCoolOverrideNightLowTemp = 18.0             // Don't deepcool if tonight will be cool anyway
-	DeepCoolCloudyThreshold      = 84               // 0-100, 84 is "broken clouds" -- future work: cool more aggressively if tomorrow will be cloudy
+	DeepCoolTemp                 = 19.0               // need to be C even if the thermostat is set to display in F
+	DeepCoolHeatTemp             = DeepCoolTemp - 5.0 // Heat should be below cool in cooling mode
+	DeepCoolMaxImportWatts       = 500000             // if in deepcool mode, how much can we "overdraw" before switching to schedule?
+	DeepCoolMinExportWatts       = -1100000           // if in schedule, how much do we need to be exporting before we start deepcool (negative for export)
+	DeepCoolModerateExportWatts  = -200000            // for "not-so-deep" cooling
+	DeepCoolModerateTempOffset   = 2.0                // how much to bump down in moderate mode
+	DeepCoolMinOutdoorTemp       = 22.0               // Don't deepcool if it's not hot
+	DeepCoolOverrideNightLowTemp = 18.0               // Don't deepcool if tonight will be cool anyway
+	DeepCoolCloudyThreshold      = 84                 // 0-100, 84 is "broken clouds"
 )
 
 func main() {
@@ -80,6 +80,10 @@ func run(ctx context.Context, cmd *cli.Command) error {
 
 	i := 0
 	forecast, _ := fetchForecast(ctx)
+
+	lastScheduleHeat := make(map[string]float64)
+	lastScheduleCool := make(map[string]float64)
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -120,6 +124,11 @@ func run(ctx context.Context, cmd *cli.Command) error {
 					continue
 				}
 
+				if info.ScheduleEnabled {
+					lastScheduleHeat[device.Name] = info.HeatSetpoint
+					lastScheduleCool[device.Name] = info.CoolSetpoint
+				}
+
 				if err := logStats(nctx, writeAPI, device.Name, info); err != nil {
 					slog.Error("unable to log to influx", "error", err)
 				}
@@ -129,19 +138,6 @@ func run(ctx context.Context, cmd *cli.Command) error {
 				if forecast != nil {
 					slog.Info("Tomorrow forecast", "high", forecast.High, "low", forecast.Low, "cloudy", forecast.Cloudy)
 				}
-
-				/* SetDenumidifySetpoint returns a 403 -- research in the go-daikin library
-				if info.IndoorHumidity > 60 && info.DehumSetpoint != 45 {
-					slog.Info("High humidity detected, lowering dehum setpoint", "current", info.IndoorHumidity)
-					if err := device.SetDehumidifySetpoint(nctx, 45); err != nil {
-						slog.Error("unable to lower dehum setpoint", "error", err)
-					}
-				} else if info.IndoorHumidity < 50 && info.DehumSetpoint != 55 {
-					slog.Info("Humidity stabilized, relaxing dehum setpoint")
-					if err := device.SetDehumidifySetpoint(nctx, 55); err != nil { // Return to a more efficient target
-						slog.Error("unable to restore dehum setpoint", "error", err)
-					}
-				} */
 
 				mo := cmd.Bool("monitor-only")
 				action := evaluateCoolingAction(avgNetMW, info, forecast)
@@ -155,28 +151,37 @@ func run(ctx context.Context, cmd *cli.Command) error {
 						}
 					}
 				case ActionFullDeepCool:
-					slog.Info("Heavy export: Engaging Full Deep Cool", "watts", avgNetMW/1000.0, "heat", info.HeatSetpoint, "cool", DeepCoolTemp)
+					slog.Info("Heavy export: Engaging Full Deep Cool", "watts", avgNetMW/1000.0, "heat", DeepCoolHeatTemp, "cool", DeepCoolTemp)
 					if !mo {
 						if err := device.SetTemps(nctx, daikin.ModeCool, DeepCoolHeatTemp, DeepCoolTemp); err != nil {
 							slog.Error("unable to set deep cool temps", "error", err)
 						}
 					}
 				case ActionModerateNudge:
-					slog.Info("Moderate export: Nudging setpoints down 2.0C", "watts", avgNetMW/1000.0)
 					if !mo {
-						// We maintain the heat/cool spread but drop the floor
-                        newCool := max(DeepCoolTemp+2, info.CoolSetpoint-2) // clamp to nearly DeepCoolTemp
-						newHeat := newCool - 5 
-
-						// Boundary safety check using the device's own reported limits
-						if newCool < info.SetPointMinimum {
-							newCool = info.SetPointMinimum
+						// Use the last known schedule as baseline
+						baseCool := info.CoolSetpoint
+						baseHeat := info.HeatSetpoint
+						if val, ok := lastScheduleCool[device.Name]; ok && val > 0 {
+							baseCool = val
 						}
+						if val, ok := lastScheduleHeat[device.Name]; ok && val > 0 {
+							baseHeat = val
+						}
+
+						newCool := baseCool - DeepCoolModerateTempOffset
+						newHeat := baseHeat - DeepCoolModerateTempOffset
+
+						// Boundary safety check
+						if newCool < DeepCoolTemp {
+							newCool = DeepCoolTemp
+						}
+
+						slog.Info("Moderate export: Nudging setpoints down", "watts", avgNetMW/1000.0, "newCool", newCool, "newHeat", newHeat, "baselineCool", baseCool)
 
 						if err := device.SetTemps(nctx, daikin.ModeCool, newHeat, newCool); err != nil {
 							slog.Error("unable to apply moderate nudge", "error", err)
 						}
-						slog.Info("Moderate export", "heat", newHeat, "cool", newCool)
 					}
 				case ActionNone:
 					slog.Debug("Neutral power zone or conditions unmet: maintaining current state")

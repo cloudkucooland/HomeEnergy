@@ -38,7 +38,9 @@ func evaluateCoolingAction(avgNetMW float64, info *daikin.Info, forecast *Foreca
 			return ActionFullDeepCool
 		}
 	case avgNetMW < DeepCoolModerateExportWatts:
-		if info.ScheduleEnabled {
+		// If we are on schedule, we want to nudge.
+		// If we are already manual (e.g., Full Deep Cool), we want to "relax" to a nudge to avoid over-cooling.
+		if info.ScheduleEnabled || info.CoolSetpoint == DeepCoolTemp {
 			return ActionModerateNudge
 		}
 	case avgNetMW > DeepCoolMaxImportWatts:
