@@ -21,20 +21,6 @@ func evaluateCoolingAction(avgNetMW float64, info *daikin.Info, forecast *Foreca
 	// Use setpoint as a proxy for manual override if schedule reports enabled but we are at the floor.
 	isManual := !info.ScheduleEnabled || info.CoolSetpoint == DeepCoolTemp
 
-	// Safety: If indoor temp is already at or below floor, revert to schedule.
-	if info.IndoorTemp <= DeepCoolTemp {
-		if isManual {
-			return ActionRevertToSchedule
-		}
-		return ActionNone
-	}
-
-	// Hysteresis: If we are on schedule, don't start deep cooling until the house
-	// has warmed up at least 1 degree above the floor.
-	if info.ScheduleEnabled && info.IndoorTemp < DeepCoolTemp+1.0 {
-		return ActionNone
-	}
-
 	if info.OutdoorTemp < DeepCoolMinOutdoorTemp {
 		if isManual {
 			return ActionRevertToSchedule
