@@ -38,7 +38,7 @@ func main() {
 		Flags: []cli.Flag{
 			&cli.BoolFlag{Name: "monitor-only", Value: false, Usage: "monitor without engaging deep cooling"},
 			&cli.StringFlag{Name: "energy-bucket", Value: "energy", Sources: cli.EnvVars("INFLUX_BUCKET"), Usage: "influxdb bucket for energy data (ro)"},
-			&cli.StringFlag{Name: "daikin-bucket", Value: "daikin", Usage: "influxdb bucket for daikin data (rw)"},
+			&cli.StringFlag{Name: "daikin-bucket", Value: "daikin", Sources: cli.EnvVars("DAIKIN_BUCKET", "INFLUX_BUCKET"), Usage: "influxdb bucket for daikin data (rw)"},
 			&cli.StringFlag{Name: "weather-bucket", Value: "weather", Sources: cli.EnvVars("WEATHER_BUCKET"), Usage: "influxdb bucket for weather data (rw)"},
 		},
 		Action: run,
@@ -202,6 +202,7 @@ func logStats(ctx context.Context, w api.WriteAPIBlocking, name string, info *da
 			"hum_outdoor":      info.OutdoorHumidity,
 			"mode":             info.Mode,
 			"schedule_enabled": info.ScheduleEnabled,
+			"deepcool_active":  !info.ScheduleEnabled,
 			"dr_active":        info.DRIsActive,
 			"dr_offset":        info.DROffsetDegree,
 			"dehum_setpoint":   info.DehumSetpoint,
