@@ -6,7 +6,7 @@ require (
 	github.com/briandowns/openweathermap v0.21.1
 	github.com/cloudkucooland/go-daikin v0.0.0-20260420020405-2b73bef50f26
 	github.com/cloudkucooland/go-envoy v0.0.0-20260410020431-53a2f2d66cf0
-	github.com/cloudkucooland/go-kasa v0.0.0-20260409231212-572c4a0bf3b9
+	github.com/cloudkucooland/go-kasa v0.0.0-20260422001404-1452c886114b
 	github.com/influxdata/influxdb-client-go/v2 v2.14.0
 	github.com/urfave/cli/v3 v3.8.0
 )

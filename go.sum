@@ -10,8 +10,8 @@ github.com/cloudkucooland/go-daikin v0.0.0-20260420020405-2b73bef50f26 h1:BlunQo
 github.com/cloudkucooland/go-daikin v0.0.0-20260420020405-2b73bef50f26/go.mod h1:LBFhx2xEzv2nUKoKlEUfFiAp4h5zbXCsF8gs4lx36uk=
 github.com/cloudkucooland/go-envoy v0.0.0-20260410020431-53a2f2d66cf0 h1:XXm7w1o/G6N/bMCIBvXvaKwKjz1QYJsv/P6pH0xBs6U=
 github.com/cloudkucooland/go-envoy v0.0.0-20260410020431-53a2f2d66cf0/go.mod h1:2lAGKlKBG1fiQANJTxKWt+qxAYl8c3NrUSaFuznvJpo=
-github.com/cloudkucooland/go-kasa v0.0.0-20260409231212-572c4a0bf3b9 h1:2MyUVeEJmuiNJsYXQaHCC/LTsRPClMTehSYPlRTpMn0=
-github.com/cloudkucooland/go-kasa v0.0.0-20260409231212-572c4a0bf3b9/go.mod h1:ICKgGO8GuiuSC+ksCfzDn5KYEcxDUb0BKPZCx2JH4kU=
+github.com/cloudkucooland/go-kasa v0.0.0-20260422001404-1452c886114b h1:ok7XOiwlsJgymLp/xh1Yl1Pbr2UseA3St4P5xB5ujxk=
+github.com/cloudkucooland/go-kasa v0.0.0-20260422001404-1452c886114b/go.mod h1:ICKgGO8GuiuSC+ksCfzDn5KYEcxDUb0BKPZCx2JH4kU=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc h1:U9qPSI2PIWSS1VwoXQT9A3Wy9MM3WgvqSxFWenqJduM=
 github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
