@@ -14,7 +14,9 @@ const (
 
 func evaluateCoolingAction(avgNetMW float64, info *daikin.Info, forecast *Forecast) CoolingAction {
 	// info.SchedOverride != 0 means a manual hold or temporary override is active.
-	isManual := info.SchedOverride != 0
+	// We also treat being at the floor (DeepCoolColdestTemp) as manual to ensure
+	// snap-back works even if the thermostat erroneously reports schedule=true.
+	isManual := info.SchedOverride != 0 || info.CoolSetpoint == DeepCoolColdestTemp
 
 	switch {
 	case info.Mode != daikin.ModeCool:
