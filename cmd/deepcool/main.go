@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"math"
 	"os"
 	"os/signal"
 	"syscall"
@@ -29,6 +30,7 @@ const (
 	DeepCoolMinOutdoorTemp       = 22.0               // Don't deepcool if it's not hot
 	DeepCoolOverrideNightLowTemp = 18.0               // Don't deepcool if tonight will be cool anyway
 	DeepCoolCloudyThreshold      = 84                 // 0-100, 84 is "broken clouds"
+	DeepCoolMaxDelta             = 3.0                // Max degrees to cool below indoor temp to prevent inverter ramp-up
 )
 
 func main() {
@@ -150,37 +152,20 @@ func run(ctx context.Context, cmd *cli.Command) error {
 							slog.Error("unable to revert to schedule", "error", err)
 						}
 					}
-				case ActionFullDeepCool:
-					slog.Info("Heavy export: Engaging Full Deep Cool", "watts", avgNetMW/1000.0, "heat", DeepCoolHeatTemp, "cool", DeepCoolTemp)
+				case ActionFullDeepCool, ActionModerateNudge:
 					if !mo {
-						if err := device.SetTemps(nctx, daikin.ModeCool, DeepCoolHeatTemp, DeepCoolTemp); err != nil {
-							slog.Error("unable to set deep cool temps", "error", err)
-						}
-					}
-				case ActionModerateNudge:
-					if !mo {
-						// Use the last known schedule as baseline
-						baseCool := info.CoolSetpoint
-						baseHeat := info.HeatSetpoint
-						if val, ok := lastScheduleCool[device.Name]; ok && val > 0 {
-							baseCool = val
-						}
-						if val, ok := lastScheduleHeat[device.Name]; ok && val > 0 {
-							baseHeat = val
-						}
+						heat, cool := calculateDynamicSetpoint(info, avgNetMW)
 
-						newCool := baseCool - DeepCoolModerateTempOffset
-						newHeat := baseHeat - DeepCoolModerateTempOffset
+						slog.Info("Dynamic cooling adjustment",
+							"action", action,
+							"net_watts", fmt.Sprintf("%.2f", avgNetMW/1000.0),
+							"old_cool", info.CoolSetpoint,
+							"new_cool", cool,
+							"indoor", info.IndoorTemp,
+							"outdoor", info.OutdoorTemp)
 
-						// Boundary safety check
-						if newCool < DeepCoolTemp {
-							newCool = DeepCoolTemp
-						}
-
-						slog.Info("Moderate export: Nudging setpoints down", "watts", avgNetMW/1000.0, "newCool", newCool, "newHeat", newHeat, "baselineCool", baseCool)
-
-						if err := device.SetTemps(nctx, daikin.ModeCool, newHeat, newCool); err != nil {
-							slog.Error("unable to apply moderate nudge", "error", err)
+						if err := device.SetTemps(nctx, daikin.ModeCool, heat, cool); err != nil {
+							slog.Error("unable to apply dynamic setpoint", "error", err)
 						}
 					}
 				case ActionNone:
@@ -190,6 +175,39 @@ func run(ctx context.Context, cmd *cli.Command) error {
 			}
 		}
 	}
+}
+
+func calculateDynamicSetpoint(info *daikin.Info, avgNetMW float64) (float64, float64) {
+	exportWatts := -avgNetMW / 1000.0 // mW to W (negative avgNetMW means export)
+
+	// Efficiency Factor: Watts required to lower indoor temp by 1C.
+	// Heuristic: 300W/C at 20C outdoor, ramping to ~1000W/C at 40C outdoor.
+	efficiencyFactor := 300.0 + max(0, info.OutdoorTemp-20.0)*35.0
+
+	// additionalDelta is how much further we can lower the setpoint.
+	// If exportWatts is negative (importing), this will be negative, pushing the setpoint UP.
+	additionalDelta := exportWatts / efficiencyFactor
+
+	// Target is current setpoint minus the additional affordable delta.
+	targetCool := info.CoolSetpoint - additionalDelta
+
+	// SAFETY CONSTRAINTS
+	// 1. Absolute floor
+	if targetCool < DeepCoolTemp {
+		targetCool = DeepCoolTemp
+	}
+
+	// 2. Inverter Ramp Protection: Keep target within DeepCoolMaxDelta of indoor temp.
+	// This prevents the AC from seeing a huge delta and ramping to max power.
+	if targetCool < info.IndoorTemp-DeepCoolMaxDelta {
+		targetCool = info.IndoorTemp - DeepCoolMaxDelta
+	}
+
+	// 3. Round to nearest 0.5C for thermostat compatibility
+	targetCool = math.Round(targetCool*2) / 2
+	targetHeat := targetCool - 5.0
+
+	return targetHeat, targetCool
 }
 
 func logStats(ctx context.Context, w api.WriteAPIBlocking, name string, info *daikin.Info) error {
