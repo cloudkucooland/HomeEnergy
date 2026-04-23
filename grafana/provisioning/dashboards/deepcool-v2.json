@@ -813,7 +813,7 @@
                     "group": "influxdb",
                     "kind": "DataQuery",
                     "spec": {
-                      "query": "from(bucket: \"energy\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"daikin_stats\")\n  |> filter(fn: (r) => r[\"_field\"] == \"deepcool_active\")\n  |> aggregateWindow(every: 10m, fn: last, createEmpty: true)\n  |> fill(column: \"_value\", value: false)\n  |> map(fn: (r) => ({\n      r with _value: if r._value == true then 2.0 else 1.0\n    }))\n  |> yield(name: \"fixed_ledge\")"
+                      "query": "from(bucket: \"energy\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"daikin_stats\")\n  |> filter(fn: (r) => r[\"_field\"] == \"deepcool_active\" or r[\"_field\"] == \"schedule_enabled\")\n  |> pivot(rowKey:[\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> map(fn: (r) => ({\n      r with _value: if exists r.deepcool_active then (if r.deepcool_active then 2.0 else 1.0)\n                     else (if exists r.schedule_enabled then (if r.schedule_enabled == false then 2.0 else 1.0) else 1.0)\n    }))\n  |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: true)\n  |> fill(column: \"_value\", value: 1.0)\n  |> yield(name: \"status\")"
                     },
                     "version": "v0"
                   },
