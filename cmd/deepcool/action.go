@@ -13,7 +13,8 @@ const (
 )
 
 func evaluateCoolingAction(avgNetMW float64, info *daikin.Info, forecast *Forecast) CoolingAction {
-	isManual := !info.ScheduleEnabled
+	// info.SchedOverride != 0 means a manual hold or temporary override is active.
+	isManual := info.SchedOverride != 0
 
 	switch {
 	case info.Mode != daikin.ModeCool:
@@ -27,7 +28,7 @@ func evaluateCoolingAction(avgNetMW float64, info *daikin.Info, forecast *Foreca
 			return ActionRevertToSchedule
 		}
 	case forecast != nil && forecast.Low < DeepCoolOverrideNightLowTemp:
-		// forcast says tonight will be cool, no need to spend the solar, get a few pennies from the power company
+		// forecast says tonight will be cool, no need to spend the solar
 		if isManual {
 			return ActionRevertToSchedule
 		}

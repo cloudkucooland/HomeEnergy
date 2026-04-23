@@ -21,13 +21,13 @@ import (
 // this is due to the field name in the go-envoy library
 
 const (
-	DeepCoolColdestTemp            = 19.0     // need to be C even if the thermostat is set to display in F
-	DeepCoolMaxImportMilliWatts    = 500000   // if in deepcool mode, how much can we "overdraw" before switching to schedule?
-	DeepCoolExportingMilliWatts    = -500000  // if in schedule, how much do we need to be exporting before we start deepcool (negative for export)
-	DeepCoolMinOutdoorTemp         = 22.0     // Don't deepcool if it's not hot
-	DeepCoolOverrideNightLowTemp   = 18.0     // Don't deepcool if tonight will be cool anyway
-	DeepCoolCloudyThreshold        = 84       // 0-100, 84 is "broken clouds"
-	DeepCoolMaxDelta               = 3.0      // Max degrees to cool below indoor temp to prevent inverter ramp-up
+	DeepCoolColdestTemp            = 19.0    // need to be C even if the thermostat is set to display in F
+	DeepCoolMaxImportMilliWatts    = 500000  // if in deepcool mode, how much can we "overdraw" before switching to schedule?
+	DeepCoolExportingMilliWatts    = -500000 // if in schedule, how much do we need to be exporting before we start deepcool (negative for export)
+	DeepCoolMinOutdoorTemp         = 22.0    // Don't deepcool if it's not hot
+	DeepCoolOverrideNightLowTemp   = 18.0    // Don't deepcool if tonight will be cool anyway
+	DeepCoolCloudyThreshold        = 84      // 0-100, 84 is "broken clouds"
+	DeepCoolMaxDelta               = 3.0     // Max degrees to cool below indoor temp to prevent inverter ramp-up
 )
 
 func main() {
@@ -37,7 +37,7 @@ func main() {
 		Flags: []cli.Flag{
 			&cli.BoolFlag{Name: "monitor-only", Value: false, Usage: "monitor without engaging deep cooling"},
 			&cli.StringFlag{Name: "energy-bucket", Value: "energy", Sources: cli.EnvVars("INFLUX_BUCKET"), Usage: "influxdb bucket for energy data (ro)"},
-			&cli.StringFlag{Name: "daikin-bucket", Value: "daikin", Sources: cli.EnvVars("DAIKIN_BUCKET"), Usage: "influxdb bucket for daikin data (rw)"},
+			&cli.StringFlag{Name: "daikin-bucket", Value: "daikin", Sources: cli.EnvVars("DAIKIN_BUCKET", "INFLUX_BUCKET"), Usage: "influxdb bucket for daikin data (rw)"},
 			&cli.StringFlag{Name: "weather-bucket", Value: "weather", Sources: cli.EnvVars("WEATHER_BUCKET"), Usage: "influxdb bucket for weather data (rw)"},
 		},
 		Action: run,
@@ -80,16 +80,13 @@ func run(ctx context.Context, cmd *cli.Command) error {
 	i := 0
 	forecast, _ := fetchForecast(ctx)
 
-	lastScheduleHeat := make(map[string]float64)
-	lastScheduleCool := make(map[string]float64)
-
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
 		case <-ticker.C:
 			// Fetch weather context once per hour
-			if i%6 == 0 {
+			if i%60 == 0 {
 				forecast, err = fetchForecast(ctx)
 				if err != nil {
 					slog.Error("unable to fetch weather forecast", "error", err)
@@ -106,9 +103,7 @@ func run(ctx context.Context, cmd *cli.Command) error {
 				avgNetMW, err := getAveragePower(nctx, cmd, queryAPI)
 				if err != nil {
 					slog.Error("error getting average power", "err", err)
-					if err := device.SetModeSchedule(ctx); err != nil { // failsafe, use primary context
-						slog.Error("unable to switch to schedule", "error", err)
-					}
+					// failsafe: don't clear override here as we might just have a network glitch
 					ncancel()
 					continue
 				}
@@ -116,27 +111,15 @@ func run(ctx context.Context, cmd *cli.Command) error {
 				info, err := device.GetInfo(nctx)
 				if err != nil {
 					slog.Error("error polling daikin", "err", err)
-					if err := device.SetModeSchedule(ctx); err != nil { // failsafe, use primary context
-						slog.Error("unable to switch to schedule", "error", err)
-					}
 					ncancel()
 					continue
-				}
-
-				if info.ScheduleEnabled {
-					lastScheduleHeat[device.Name] = info.HeatSetpoint
-					lastScheduleCool[device.Name] = info.CoolSetpoint
 				}
 
 				if err := logStats(nctx, writeAPI, device.Name, info); err != nil {
 					slog.Error("unable to log to influx", "error", err)
 				}
 
-				slog.Info("tick", "device", device.Name, "net_watts", fmt.Sprintf("%.2f", avgNetMW/1000.0), "mode", info.Mode, "indoor", info.IndoorTemp, "outdoor", info.OutdoorTemp, "schedule", info.ScheduleEnabled, "cool", info.CoolSetpoint, "heat", info.HeatSetpoint)
-
-				/* if forecast != nil {
-					slog.Info("Tomorrow forecast", "high", forecast.High, "low", forecast.Low, "cloudy", forecast.Cloudy)
-				} */
+				slog.Info("tick", "device", device.Name, "net_watts", fmt.Sprintf("%.2f", avgNetMW/1000.0), "mode", info.Mode, "indoor", info.IndoorTemp, "outdoor", info.OutdoorTemp, "schedule", info.ScheduleEnabled, "override", info.SchedOverride, "cool", info.CoolSetpoint, "heat", info.HeatSetpoint)
 
 				mo := cmd.Bool("monitor-only")
 				action := evaluateCoolingAction(avgNetMW, info, forecast)
@@ -145,25 +128,8 @@ func run(ctx context.Context, cmd *cli.Command) error {
 				case ActionRevertToSchedule:
 					slog.Info("Snapping back to schedule settings", "reason", "evaluateCoolingAction", "indoor", info.IndoorTemp, "net_watts", avgNetMW/1000.0)
 					if !mo {
-						// Fallback: Explicitly set the temps back to schedule baselines
-						baseCool := 0.0
-						baseHeat := 0.0
-						if val, ok := lastScheduleCool[device.Name]; ok && val > 0 {
-							baseCool = val
-						}
-						if val, ok := lastScheduleHeat[device.Name]; ok && val > 0 {
-							baseHeat = val
-						}
-
-						if err := device.SetModeSchedule(nctx); err != nil {
-							slog.Error("unable to revert to schedule", "error", err)
-						}
-
-						if baseCool > 0 {
-							slog.Info("Restoring schedule setpoints", "cool", baseCool, "heat", baseHeat)
-							if err := device.SetTemps(nctx, daikin.ModeCool, baseHeat, baseCool); err != nil {
-								slog.Error("unable to restore schedule temps", "error", err)
-							}
+						if err := device.ClearScheduleOverride(nctx); err != nil {
+							slog.Error("unable to clear schedule override", "error", err)
 						}
 					}
 				case ActionUseTheSolar:
@@ -200,29 +166,25 @@ func calculateDynamicSetpoint(info *daikin.Info, avgNetMW float64) (float64, flo
 	exportWatts := -avgNetMW / 1000.0 // mW to W (negative avgNetMW means export)
 
 	// Efficiency Factor: Watts required to lower indoor temp by 1C.
-	// Heuristic: 300W/C at 20C outdoor, ramping to ~1000W/C at 40C outdoor.
 	efficiencyFactor := 300.0 + max(0, info.OutdoorTemp-20.0)*35.0
 
 	// additionalDelta is how much further we can lower the setpoint.
-	// If exportWatts is negative (importing), this will be negative, pushing the setpoint UP.
 	additionalDelta := exportWatts / efficiencyFactor
 
 	// Target is current setpoint minus the additional affordable delta.
 	targetCool := info.CoolSetpoint - additionalDelta
 
 	// SAFETY CONSTRAINTS
-	// 1. Absolute floor
 	if targetCool < DeepCoolColdestTemp {
 		targetCool = DeepCoolColdestTemp
 	}
 
-	// 2. Inverter Ramp Protection: Keep target within DeepCoolMaxDelta of indoor temp.
-	// This prevents the AC from seeing a huge delta and ramping to max power.
+	// Inverter Ramp Protection
 	if targetCool < info.IndoorTemp-DeepCoolMaxDelta {
 		targetCool = info.IndoorTemp - DeepCoolMaxDelta
 	}
 
-	// 3. Round to nearest 0.1C for thermostat compatibility -- display is at 0.5 percision but logic is 0.1
+	// Round to 0.1C
 	targetCool = math.Round(targetCool*10) / 10
 	targetHeat := targetCool - info.SetPointDelta
 
@@ -239,7 +201,8 @@ func logStats(ctx context.Context, w api.WriteAPIBlocking, name string, info *da
 			"hum_outdoor":      info.OutdoorHumidity,
 			"mode":             info.Mode,
 			"schedule_enabled": info.ScheduleEnabled,
-			"deepcool_active":  !info.ScheduleEnabled,
+			"sched_override":   info.SchedOverride,
+			"deepcool_active":  info.SchedOverride != 0,
 			"dr_active":        info.DRIsActive,
 			"dr_offset":        info.DROffsetDegree,
 			"dehum_setpoint":   info.DehumSetpoint,

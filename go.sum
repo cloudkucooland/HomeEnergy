@@ -6,8 +6,8 @@ github.com/briandowns/openweathermap v0.21.1 h1:TPbuixuF+aGJP1mpgTNny6eUkdbvj7gq
 github.com/briandowns/openweathermap v0.21.1/go.mod h1:0GLnknqicWxXnGi1IqoOaZIw+kIe5hkt+YM5WY3j8+0=
 github.com/brutella/dnssd v1.2.14 h1:qLpTnRTm5peo2jA30hqMIbCuWn8x3sFg3e9o9ODOobw=
 github.com/brutella/dnssd v1.2.14/go.mod h1:tG4GE8orv6+irE5rdsNgb6MJSxm6cyMUKdC5jmD22gk=
-github.com/cloudkucooland/go-daikin v0.0.0-20260420020405-2b73bef50f26 h1:BlunQovdqFOBGH1J5lDyUnQlEO0rU2vHDsMvyP3LwvE=
-github.com/cloudkucooland/go-daikin v0.0.0-20260420020405-2b73bef50f26/go.mod h1:LBFhx2xEzv2nUKoKlEUfFiAp4h5zbXCsF8gs4lx36uk=
+github.com/cloudkucooland/go-daikin v0.0.0-20260423222530-e106a1d03bec h1:q/SuOn38d/0zmQtwkyaAUm6Fkcb4AHWc2sn2/k4ZikE=
+github.com/cloudkucooland/go-daikin v0.0.0-20260423222530-e106a1d03bec/go.mod h1:LBFhx2xEzv2nUKoKlEUfFiAp4h5zbXCsF8gs4lx36uk=
 github.com/cloudkucooland/go-envoy v0.0.0-20260410020431-53a2f2d66cf0 h1:XXm7w1o/G6N/bMCIBvXvaKwKjz1QYJsv/P6pH0xBs6U=
 github.com/cloudkucooland/go-envoy v0.0.0-20260410020431-53a2f2d66cf0/go.mod h1:2lAGKlKBG1fiQANJTxKWt+qxAYl8c3NrUSaFuznvJpo=
 github.com/cloudkucooland/go-kasa v0.0.0-20260422001404-1452c886114b h1:ok7XOiwlsJgymLp/xh1Yl1Pbr2UseA3St4P5xB5ujxk=
