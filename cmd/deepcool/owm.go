@@ -36,7 +36,7 @@ func fetchForecast(ctx context.Context) (*Forecast, error) {
 	if err := w.DailyByZipcode(os.Getenv("OWM_ZIPCODE"), "US", 5); err != nil {
 		return nil, err
 	}
-    ff := w.ForecastWeatherJson.(*owm.Forecast5WeatherData)
+	ff := w.ForecastWeatherJson.(*owm.Forecast5WeatherData)
 
 	now := time.Now()
 	// Define "tomorrow" as midnight to midnight tomorrow local time
@@ -93,4 +93,3 @@ func logForecast(ctx context.Context, w api.WriteAPIBlocking, f *Forecast) error
 		f.ValidAt)
 	return w.WritePoint(ctx, p)
 }
-

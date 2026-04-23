@@ -34,7 +34,7 @@ func evaluateCoolingAction(avgNetMW float64, info *daikin.Info, forecast *Foreca
 
 	switch {
 	case avgNetMW < DeepCoolMinExportWatts:
-		if info.ScheduleEnabled {
+		if info.ScheduleEnabled || info.CoolSetpoint != DeepCoolTemp {
 			return ActionFullDeepCool
 		}
 	case avgNetMW < DeepCoolModerateExportWatts:

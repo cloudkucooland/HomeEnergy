@@ -1,8 +1,8 @@
 package main
 
 import (
-	"testing"
 	"github.com/cloudkucooland/go-daikin"
+	"testing"
 )
 
 func TestEvaluateCoolingAction(t *testing.T) {

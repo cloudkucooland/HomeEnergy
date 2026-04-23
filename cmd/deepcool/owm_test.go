@@ -14,7 +14,7 @@ func TestForecast(t *testing.T) {
 	ff := &owm.Forecast5WeatherData{
 		List: []owm.Forecast5WeatherList{},
 	}
-	
+
 	// generate 40 items (3 hours each)
 	for i := 0; i < 40; i++ {
 		dt := now.Add(time.Duration(i*3) * time.Hour)
