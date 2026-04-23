@@ -18,7 +18,7 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "links": [],
+  "liveNow": true,
   "panels": [
     {
       "datasource": {
@@ -65,7 +65,6 @@
               "mode": "off"
             }
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -214,13 +213,17 @@
         ]
       },
       "gridPos": {
-        "h": 11,
+        "h": 13,
         "w": 24,
         "x": 0,
         "y": 0
       },
       "id": 2,
       "options": {
+        "annotations": {
+          "clustering": -1,
+          "multiLane": false
+        },
         "legend": {
           "calcs": [],
           "displayMode": "list",
@@ -233,7 +236,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.4.2",
+      "pluginVersion": "13.0.1",
       "targets": [
         {
           "datasource": {
@@ -253,6 +256,237 @@
         }
       ],
       "title": "W vs Temp",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "InfluxDB_Energy"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "B"
+            },
+            "properties": [
+              {
+                "id": "custom.axisLabel",
+                "value": "Running"
+              },
+              {
+                "id": "custom.axisSoftMax",
+                "value": 2
+              },
+              {
+                "id": "custom.axisSoftMin",
+                "value": 1
+              },
+              {
+                "id": "custom.lineInterpolation",
+                "value": "stepAfter"
+              },
+              {
+                "id": "custom.scaleDistribution",
+                "value": {
+                  "type": "linear"
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 41
+              },
+              {
+                "id": "custom.axisColorMode",
+                "value": "series"
+              },
+              {
+                "id": "displayName",
+                "value": "Deep Cool Running"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "A"
+            },
+            "properties": [
+              {
+                "id": "custom.fillOpacity",
+                "value": 45
+              },
+              {
+                "id": "custom.gradientMode",
+                "value": "opacity"
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "Watts"
+              },
+              {
+                "id": "unit",
+                "value": "sishort"
+              },
+              {
+                "id": "displayName",
+                "value": "Net Consumption"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "left"
+              },
+              {
+                "id": "custom.axisColorMode",
+                "value": "series"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "C"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "left"
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "Watts"
+              },
+              {
+                "id": "unit",
+                "value": "sishort"
+              },
+              {
+                "id": "displayName",
+                "value": "Production"
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "dash": [
+                    10,
+                    10
+                  ],
+                  "fill": "dash"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 12,
+        "w": 24,
+        "x": 0,
+        "y": 13
+      },
+      "id": 1,
+      "options": {
+        "annotations": {
+          "clustering": -1,
+          "multiLane": false
+        },
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "13.0.1",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "InfluxDB_Energy"
+          },
+          "query": "from(bucket: \"energy\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"emeter\")\n  |> filter(fn: (r) => r[\"alias\"] =~ /net-consumption-L[12]/)\n  |> filter(fn: (r) => r[\"_field\"] == \"PowerMW\")\n  |> map(fn: (r) => ({ r with _value: float(v: r._value) }))\n  |> group(columns: [\"_time\"])\n  |> sum()\n  |> group()\n  |> map(fn: (r) => ({ r with _value: r._value / 1000.0 }))\n  |> yield(name: \"house_power_kw\")",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "InfluxDB_Energy"
+          },
+          "query": "from(bucket: \"daikin\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"daikin_stats\")\n  |> filter(fn: (r) => r[\"_field\"] == \"schedule_enabled\")\n  |> aggregateWindow(every: 10m, fn: last, createEmpty: true)\n  |> fill(column: \"_value\", value: false)\n  |> map(fn: (r) => ({\n      r with _value: if r._value == true then 1.0 else 2.0\n    }))\n  |> yield(name: \"fixed_ledge\")",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "InfluxDB_Energy"
+          },
+          "query": "from(bucket: \"energy\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"emeter\")\n  |> filter(fn: (r) => r[\"alias\"] =~ /production-L[12]/)\n  |> filter(fn: (r) => r[\"_field\"] == \"PowerMW\")\n  |> map(fn: (r) => ({ r with _value: float(v: r._value) }))\n  |> group(columns: [\"_time\"])\n  |> sum()\n  |> group()\n  |> map(fn: (r) => ({ r with _value: r._value / 1000.0 }))\n  |> yield(name: \"production\")",
+          "refId": "C"
+        }
+      ],
+      "title": "DeepCool Running",
       "type": "timeseries"
     },
     {
@@ -299,7 +533,6 @@
               "mode": "off"
             }
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -381,10 +614,14 @@
         "h": 11,
         "w": 12,
         "x": 0,
-        "y": 11
+        "y": 25
       },
-      "id": 4,
+      "id": 3,
       "options": {
+        "annotations": {
+          "clustering": -1,
+          "multiLane": false
+        },
         "legend": {
           "calcs": [
             "mean",
@@ -400,7 +637,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.4.2",
+      "pluginVersion": "13.0.1",
       "targets": [
         {
           "datasource": {
@@ -432,112 +669,8 @@
     },
     {
       "datasource": {
-        "type": "influxdb",
-        "uid": "InfluxDB_Energy"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "log": 10,
-              "type": "log"
-            },
-            "showPoints": "auto",
-            "showValues": false,
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 11,
-        "w": 12,
-        "x": 12,
-        "y": 11
-      },
-      "id": 1,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "12.4.2",
-      "targets": [
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "InfluxDB_Energy"
-          },
-          "query": "from(bucket: \"energy\")\n  |> range(start: -12h) \n  |> filter(fn: (r) => r[\"_measurement\"] == \"emeter\")\n  // Regex to catch both phases\n  |> filter(fn: (r) => r[\"alias\"] =~ /net-consumption-L[12]/)\n  |> filter(fn: (r) => r[\"_field\"] == \"PowerMW\")\n  // 1. Cast to float immediately\n  |> map(fn: (r) => ({ r with _value: float(v: r._value) }))\n  // 2. Pivot/Group so L1 and L2 are in the same table\n  |> group(columns: [\"_time\"])\n  // 3. Sum the values across the phases for each timestamp\n  |> sum()\n  // 4. Group back to a single series for the graph\n  |> group()\n  // 5. Convert to kW and Yield\n  |> map(fn: (r) => ({ r with _value: r._value / 1000.0 }))\n  |> yield(name: \"house_power_kw\")",
-          "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "InfluxDB_Energy"
-          },
-          "query": "from(bucket: \"daikin\")\n  |> range(start: -12h)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"daikin_stats\")\n  |> filter(fn: (r) => r[\"_field\"] == \"schedule_enabled\")\n  // Force boolean to a float value of 1500.0 (On) or 0.0 (Off)\n  |> map(fn: (r) => ({ \n      r with _value: if r._value == true then 1500.0 else 0.0 \n  }))\n  |> yield(name: \"deepcool_status\")",
-          "refId": "B"
-        }
-      ],
-      "title": "DeepCool Running",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "influxdb",
-        "uid": "InfluxDB_Energy"
+        "type": "mixed",
+        "uid": "-- Mixed --"
       },
       "description": "Somehow it should be possible to find the difference between these two.",
       "fieldConfig": {
@@ -567,8 +700,6 @@
             },
             "show": "points"
           },
-          "fieldMinMax": false,
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -640,12 +771,12 @@
         ]
       },
       "gridPos": {
-        "h": 7,
+        "h": 11,
         "w": 12,
-        "x": 0,
-        "y": 22
+        "x": 12,
+        "y": 25
       },
-      "id": 3,
+      "id": 4,
       "options": {
         "legend": {
           "calcs": [],
@@ -688,7 +819,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.4.2",
+      "pluginVersion": "13.0.1",
       "targets": [
         {
           "datasource": {
@@ -708,7 +839,6 @@
         },
         {
           "datasource": {
-            "name": "Expression",
             "type": "__expr__",
             "uid": "__expr__"
           },
@@ -736,8 +866,7 @@
           "options": {
             "regex": ".*alias=\"([^\"]+)\".*device=\".{37}(.{3})\".*",
             "renamePattern": "$1 ($2)"
-          },
-          "topic": "series"
+          }
         },
         {
           "filter": {
@@ -748,8 +877,7 @@
           "options": {
             "regex": ".*alias=\"([^\"]+)\"",
             "renamePattern": "$1 ($2)"
-          },
-          "topic": "series"
+          }
         },
         {
           "id": "joinByField",
@@ -760,19 +888,34 @@
     }
   ],
   "preload": false,
+  "refresh": "",
   "schemaVersion": 42,
-  "tags": ["modeling"],
-  "templating": {
-    "list": []
-  },
+  "tags": [
+    "modeling",
+    "power",
+    "solar"
+  ],
   "time": {
-    "from": "now-12h",
+    "from": "now-6h",
     "to": "now"
   },
-  "timepicker": {},
+  "timepicker": {
+    "refresh_intervals": [
+      "5s",
+      "10s",
+      "30s",
+      "1m",
+      "5m",
+      "15m",
+      "30m",
+      "1h",
+      "2h",
+      "1d"
+    ]
+  },
   "timezone": "browser",
-  "title": "DeepCool modeling",
-  "uid": "ad2wrgp",
-  "version": 32,
-  "weekStart": ""
+  "title": "Deepcool Modeling",
+  "version": 20,
+  "uid": "adjhbgs",
+  "id": 2462462824460288
 }
