@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/cloudkucooland/go-daikin"
+	"math"
 )
 
 type CoolingAction int
@@ -12,8 +13,14 @@ const (
 	ActionRevertToSchedule
 )
 
-func evaluateCoolingAction(avgNetMW float64, info *daikin.Info, forecast *Forecast) CoolingAction {
-	isManual := info.ScheduleEnabled == false
+func evaluateCoolingAction(avgNetMW float64, info *daikin.Info, forecast *Forecast, baselineCool float64) CoolingAction {
+	// Detect manual override:
+	// 1. API explicitly says schedule is disabled.
+	// 2. OR current setpoint deviates from our captured schedule baseline.
+	isManual := !info.ScheduleEnabled
+	if baselineCool > 0 && math.Abs(info.CoolSetpoint-baselineCool) > 0.5 {
+		isManual = true
+	}
 
 	switch {
 	case info.Mode != daikin.ModeCool:
