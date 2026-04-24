@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	github.com/briandowns/openweathermap v0.21.1
-	github.com/cloudkucooland/go-daikin v0.0.0-20260423222530-e106a1d03bec
+	github.com/cloudkucooland/go-daikin v0.0.0-20260424010202-d3a784adf7e5
 	github.com/cloudkucooland/go-envoy v0.0.0-20260410020431-53a2f2d66cf0
 	github.com/cloudkucooland/go-kasa v0.0.0-20260422001404-1452c886114b
 	github.com/influxdata/influxdb-client-go/v2 v2.14.0

@@ -12,10 +12,8 @@ const (
 	ActionRevertToSchedule
 )
 
-func evaluateCoolingAction(avgNetMW float64, info *daikin.Info, forecast *Forecast, isActiveControl bool) CoolingAction {
-	// If the utility has taken control, we treat it as manual.
-	// We also respect the API's override flag if it ever starts working.
-	isManual := isActiveControl || info.SchedOverride != 0
+func evaluateCoolingAction(avgNetMW float64, info *daikin.Info, forecast *Forecast) CoolingAction {
+	isManual := info.ScheduleEnabled == false
 
 	switch {
 	case info.Mode != daikin.ModeCool:
@@ -29,7 +27,7 @@ func evaluateCoolingAction(avgNetMW float64, info *daikin.Info, forecast *Foreca
 			return ActionRevertToSchedule
 		}
 	case forecast != nil && forecast.Low < DeepCoolOverrideNightLowTemp:
-		// forecast says tonight will be cool, no need to spend the solar, get a few pennies from the power company
+		// forecast says tonight will be cool, don't spend solar
 		if isManual {
 			return ActionRevertToSchedule
 		}
