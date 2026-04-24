@@ -204,6 +204,9 @@ func logStats(ctx context.Context, w api.WriteAPIBlocking, name string, info *da
 			"hum_outdoor":      info.OutdoorHumidity,
 			"mode":             info.Mode,
 			"schedule_enabled": info.ScheduleEnabled,
+			"deepcool_active":  !info.ScheduleEnabled,
+			"cool_setpoint":    info.CoolSetpoint,
+			"heat_setpoint":    info.HeatSetpoint,
 		},
 		time.Now())
 	return w.WritePoint(ctx, p)
