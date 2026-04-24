@@ -36,6 +36,7 @@ func main() {
 		Usage: "Deep cool house when exporting; depends on Daikin and InfluxDB",
 		Flags: []cli.Flag{
 			&cli.BoolFlag{Name: "monitor-only", Value: false, Usage: "monitor without engaging deep cooling"},
+			&cli.IntFlag{Name: "interval", Value: 10, Sources: cli.EnvVars("DEEPCOOL_INTERVAL"), Usage: "interval between checks (minutes)"},
 			&cli.StringFlag{Name: "energy-bucket", Value: "energy", Sources: cli.EnvVars("INFLUX_BUCKET"), Usage: "influxdb bucket for energy data (ro)"},
 			&cli.StringFlag{Name: "daikin-bucket", Value: "daikin", Sources: cli.EnvVars("DAIKIN_BUCKET", "INFLUX_BUCKET"), Usage: "influxdb bucket for daikin data (rw)"},
 			&cli.StringFlag{Name: "weather-bucket", Value: "weather", Sources: cli.EnvVars("WEATHER_BUCKET"), Usage: "influxdb bucket for weather data (rw)"},
@@ -74,7 +75,7 @@ func run(ctx context.Context, cmd *cli.Command) error {
 	queryAPI := influx.QueryAPI(os.Getenv("INFLUX_ORG"))
 	defer influx.Close()
 
-	ticker := time.NewTicker(1 * time.Minute)
+	ticker := time.NewTicker(time.Duration(cmd.Int("interval")) * time.Minute)
 	defer ticker.Stop()
 
 	i := 0
